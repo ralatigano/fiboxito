@@ -18,6 +18,11 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
 MODEL = os.getenv("MODEL", "llama3.2:3b")
 WISPRO_URL = os.getenv("WISPRO_URL", "").rstrip("/")
 WISPRO_TOKEN = os.getenv("WISPRO_TOKEN", "")
+MIKROTIKS = {
+    "moldes":   {"id": os.getenv("MIKROTIK_MOLDES_ID"),  "rango": os.getenv("MIKROTIK_MOLDES_RANGO",  "172.19.102")},
+    "pinares":  {"id": os.getenv("MIKROTIK_PINARES_ID"), "rango": os.getenv("MIKROTIK_PINARES_RANGO", "172.18.100")},
+    "sta fe":   {"id": os.getenv("MIKROTIK_STAFE_ID"),   "rango": os.getenv("MIKROTIK_STAFE_RANGO",   "172.19.102")},
+}
 TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 LOGS_DIR = os.getenv("LOGS_DIR", "logs")
 
@@ -138,10 +143,11 @@ WISPRO_HEADERS = {
 }
 
 
-def wispro_get(endpoint: str, params: dict = None) -> dict:
+def wispro_get(endpoint: str, params: dict = None, timeout: int = 10) -> dict:
     url = f"{WISPRO_URL}/api/v1/{endpoint}"
     log_debug(f"[WISPRO] GET {url} params={params}")
-    res = requests.get(url, headers=WISPRO_HEADERS, params=params, timeout=10)
+    res = requests.get(url, headers=WISPRO_HEADERS,
+                       params=params, timeout=timeout)
     data = res.json()
     log_debug(
         f"[WISPRO] status={data.get('status')} registros={len(data.get('data', []))}")
@@ -173,10 +179,15 @@ def obtener_cuenta_corriente(client_id: str) -> dict | None:
 
 
 def obtener_facturas(client_id: str, limite: int = 3) -> list:
-    data = wispro_get("invoicing/invoices",
-                      {"client_id_eq": client_id, "per_page": limite})
+    data = wispro_get("invoicing/invoices", {
+        "client_custom_id_eq": client_id,
+        "per_page": 999
+    }, timeout=50)
     if data.get("status") == 200:
-        return data.get("data", [])
+        facturas = data.get("data", [])
+        facturas = [f for f in facturas if f.get("state") != "void"]
+        facturas.sort(key=lambda x: x.get("issued_at", ""), reverse=True)
+        return facturas[:limite]
     return []
 
 
@@ -190,9 +201,39 @@ def descargar_pdf_factura(invoice_id: str) -> bytes | None:
     return None
 
 
+def obtener_ultimos_clientes(cantidad: int = 10) -> list:
+    data = wispro_get("clients", {"per_page": 20})
+    if data.get("status") != 200:
+        return []
+    total_pages = data.get("meta", {}).get(
+        "pagination", {}).get("total_pages", 1)
+    data = wispro_get("clients", {"per_page": 20, "page": total_pages})
+    if data.get("status") == 200 and data.get("data"):
+        clientes = data["data"]
+        # últimos N, más reciente primero
+        return list(reversed(clientes[-cantidad:]))
+    return []
+
+
+def obtener_ips_libres(zona: str = "moldes") -> list:
+    mk = MIKROTIKS.get(zona.lower())
+    if not mk or not mk["id"]:
+        return []
+    url = f"mikrotiks/{mk['id']}/free_ips"
+    log_debug(f"[WISPRO] IPs libres zona={zona} rango={mk['rango']}")
+    res = requests.get(
+        f"{WISPRO_URL}/api/v1/{url}",
+        headers=WISPRO_HEADERS,
+        params={"ip_cont": mk["rango"]},
+        timeout=15
+    )
+    if res.status_code == 200:
+        return res.json()
+    return []
 # ---------------------------
 # TELEGRAM
 # ---------------------------
+
 
 def send_message(chat_id: int, text: str):
     log_debug(f"[TELEGRAM OUT] texto → chat_id={chat_id}")
@@ -254,6 +295,8 @@ def detectar_intencion(texto: str) -> str:
         "cuenta", "corriente", "contrato", "habilitar", "suspender",
         "deshabilitar", "cortar", "dni", "número", "pasame", "dame",
         "mostrame", "buscame", "busca", "pdf", "última factura",
+        "último cliente", "ultimo cliente", "últimos clientes", "ultimos clientes",
+        "ip", "ips", "ip libre", "ips libres", "ip disponible", "ips disponibles",
     ]
 
     if t in saludos:
@@ -434,6 +477,7 @@ def procesar_mensaje(chat_id: int, user_message: str, nombre_usuario: str) -> tu
 
     actualizar_historial(chat_id, "user", user_message)
     ctx = contexto_reciente(chat_id)
+    msg = user_message.lower()
 
     if intencion == "saludo":
         respuesta = ask_ollama(prompt_saludo(user_message, nombre_usuario))
@@ -441,9 +485,40 @@ def procesar_mensaje(chat_id: int, user_message: str, nombre_usuario: str) -> tu
         return respuesta, None
 
     if intencion == "consulta_cliente":
-        termino = extraer_termino_busqueda(user_message)
 
-        # Si el mensaje no tiene cliente explícito, buscar en el historial
+        # Últimos clientes
+        if any(p in msg for p in ["último cliente", "ultimo cliente", "últimos clientes", "ultimos clientes", "último id", "nuevo cliente"]):
+            clientes = obtener_ultimos_clientes()
+            if not clientes:
+                return "No pude obtener los últimos clientes.", None
+            lineas = ["Últimos clientes registrados:"]
+            for c in clientes:
+                pid = c.get("public_id", "N/A")
+                nombre = c.get("name", "N/A")
+                fecha = c.get("created_at", "")[:10]
+                username = f"client{pid}"
+                lineas.append(f"  #{pid} — {nombre} ({fecha}) → {username}")
+            respuesta = "\n".join(lineas)
+            actualizar_historial(chat_id, "assistant", respuesta)
+            return respuesta, None
+
+        # IPs libres
+        if any(p in msg for p in ["ip", "ips", "ip libre", "ips libres", "ip disponible", "ips disponibles"]):
+            zona = "pinares" if "pinares" in msg else "sta fe" if "sta fe" in msg else "moldes"
+            mk = MIKROTIKS.get(zona, {})
+            ips = obtener_ips_libres(zona)
+            if not ips:
+                respuesta = f"No encontré IPs libres para {zona} o hubo un error."
+            else:
+                lista = "\n".join(f"  {ip}" for ip in ips[:10])
+                respuesta = f"IPs libres en {zona.title()} ({mk.get('rango', '')}.X):\n{lista}"
+            actualizar_historial(chat_id, "assistant", respuesta)
+            return respuesta, None
+
+        # Búsqueda de cliente
+        termino = extraer_termino_busqueda(user_message)
+        log_debug(f"[WISPRO] Buscando término: '{termino}'")
+
         if not termino:
             termino = cliente_del_historial(chat_id)
             if termino:
@@ -467,7 +542,8 @@ def procesar_mensaje(chat_id: int, user_message: str, nombre_usuario: str) -> tu
         client_id = str(cliente.get("id", ""))
         contratos = obtener_contratos(client_id)
         cuenta = obtener_cuenta_corriente(client_id)
-        facturas = obtener_facturas(client_id)
+        custom_id = str(cliente.get("custom_id", "")).zfill(4)
+        facturas = obtener_facturas(custom_id)
 
         texto, pdf = respuesta_directa(
             cliente, contratos, facturas, cuenta, user_message, nombre_usuario)
@@ -475,7 +551,6 @@ def procesar_mensaje(chat_id: int, user_message: str, nombre_usuario: str) -> tu
         actualizar_historial(chat_id, "assistant", texto)
         return texto, pdf
 
-    # General — pasamos el contexto reciente al modelo
     respuesta = ask_ollama(prompt_general(user_message, nombre_usuario, ctx))
     actualizar_historial(chat_id, "assistant", respuesta)
     return respuesta, None
@@ -525,7 +600,8 @@ async def drain_pending_updates() -> int | None:
         None,
         lambda: requests.get(
             f"{TELEGRAM_API}/getUpdates",
-            params={"timeout": 0}
+            params={"timeout": 0},
+            timeout=15
         ).json()
     )
     if "result" in res and res["result"]:
@@ -546,9 +622,10 @@ async def polling_loop():
             loop = asyncio.get_event_loop()
             res = await loop.run_in_executor(
                 None,
-                lambda: requests.get(
+                lambda o=offset: requests.get(
                     f"{TELEGRAM_API}/getUpdates",
-                    params={"timeout": 10, "offset": offset}
+                    params={"timeout": 10, "offset": o},
+                    timeout=15
                 ).json()
             )
 
@@ -623,6 +700,7 @@ async def polling_loop():
                     log_conversacion(chat_id, nombre_usuario, text, texto)
 
         except Exception as e:
-            log_error(f"[ERROR en polling] {e}")
+            import traceback
+            log_error(f"[ERROR en polling] {e}\n{traceback.format_exc()}")
 
         await asyncio.sleep(1)
