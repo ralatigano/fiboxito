@@ -11,12 +11,15 @@ from logging.handlers import TimedRotatingFileHandler
 import json
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
+
+# --- CONFIGURACIÓN ---
+# load_dotenv() debe ejecutarse ANTES de importar los routers,
+# porque estos leen os.getenv() a nivel de módulo al importarse.
+load_dotenv()
+
 from routers import mapa as mapa_router
 from routers import comprobantes as comprobantes_router
 from routers import opa_poller
-
-# --- CONFIGURACIÓN ---
-load_dotenv()
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
