@@ -767,8 +767,8 @@ async def polling_loop():
                 None,
                 lambda o=offset: requests.get(
                     f"{TELEGRAM_API}/getUpdates",
-                    params={"timeout": 10, "offset": o},
-                    timeout=15
+                    params={"timeout": 5, "offset": o},
+                    timeout=10
                 ).json()
             )
 
