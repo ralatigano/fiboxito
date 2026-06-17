@@ -9,6 +9,11 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from logging.handlers import TimedRotatingFileHandler
 import json
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+from routers import mapa as mapa_router
+from routers import comprobantes as comprobantes_router
+from routers import opa_poller
 
 # --- CONFIGURACIÓN ---
 load_dotenv()
@@ -52,6 +57,7 @@ def get_logger() -> logging.Logger:
         when="midnight",
         backupCount=30,
         encoding="utf-8",
+        delay=True,
     )
     file_handler.suffix = "%Y-%m-%d"
     file_handler.setLevel(logging.DEBUG)
@@ -117,6 +123,95 @@ def agregar_a_whitelist(chat_id: int) -> bool:
     whitelist.append(chat_id)
     guardar_whitelist(whitelist)
     return True
+MANUAL_FILE = os.getenv("MANUAL_FILE", "manual_fiboxito.txt")
+
+AYUDA_TEMAS: dict[str, str] = {
+    "cliente": (
+        "Consultas de clientes\n"
+        "──────────────────────\n"
+        "Buscá por número de ID o por nombre:\n\n"
+        '  "Dame el estado del cliente 1234"\n'
+        '  "Buscame a González"\n'
+        '  "Saldo de Martínez"\n'
+        '  "Email y teléfono del 850"\n\n'
+        "Datos disponibles: nombre, email, teléfono, dirección,\n"
+        "saldo, contrato, plan y facturas recientes.\n\n"
+        "Si en los siguientes mensajes preguntás más datos del\n"
+        "mismo cliente, Fiboxito lo recuerda sin que repitas el ID."
+    ),
+    "factura": (
+        "Facturas\n"
+        "─────────\n"
+        "Para ver las últimas facturas de un cliente:\n\n"
+        '  "Facturas del 1234"\n'
+        '  "¿Pagó Rodríguez?"\n'
+        '  "Cobros de Martínez"\n\n'
+        "Muestra las últimas 3 facturas con: número, período,\n"
+        "monto, estado y fecha de vencimiento."
+    ),
+    "pdf": (
+        "PDF de factura\n"
+        "───────────────\n"
+        "Para descargar el PDF de la última factura:\n\n"
+        '  "Última factura de 1234"\n'
+        '  "Dame el PDF del cliente González"\n'
+        '  "Descargar factura del 850"\n\n'
+        "El bot descarga el PDF desde Wispro y te lo envía\n"
+        "como archivo adjunto directamente en este chat."
+    ),
+    "ip": (
+        "IPs disponibles\n"
+        "────────────────\n"
+        "Consultá IPs libres por zona de red:\n\n"
+        '  "IPs libres moldes"\n'
+        '  "IPs disponibles pinares"\n'
+        '  "IPs libres sta fe"\n\n'
+        "Si no indicás zona, usa Moldes por defecto.\n"
+        "Devuelve hasta 10 IPs disponibles del Mikrotik de la zona."
+    ),
+    "comprobante": (
+        "Análisis de comprobantes\n"
+        "─────────────────────────\n"
+        "Mandá una foto de un comprobante de pago al chat.\n"
+        "No hace falta escribir nada, solo enviá la imagen.\n\n"
+        "Fiboxito verifica:\n"
+        "  · ¿Es un comprobante válido?\n"
+        "  · ¿El destinatario es Fibox?\n"
+        "  · Monto y fecha detectados\n\n"
+        "También funciona de forma automática desde Hola Suite:\n"
+        "cuando un cliente comparte un comprobante, el bot lo\n"
+        "analiza, cierra el ticket y te avisa por Telegram."
+    ),
+    "agregar": (
+        "Agregar usuarios autorizados\n"
+        "─────────────────────────────\n"
+        "Solo admins. Ejecutá desde un chat ya autorizado:\n\n"
+        "  /agregar 1024169379\n\n"
+        "Para grupos (el ID es negativo):\n"
+        "  /agregar -1001234567890\n\n"
+        "El chat_id de un usuario aparece en el mensaje\n"
+        "de 'acceso denegado' cuando intenta usar el bot."
+    ),
+    "manual": (
+        "Manual completo\n"
+        "────────────────\n"
+        "Para descargar el manual completo de Fiboxito:\n\n"
+        "  /manual\n\n"
+        "El bot te envía el archivo con toda la documentación."
+    ),
+}
+
+AYUDA_ALIAS: dict[str, str] = {
+    "clientes": "cliente",
+    "facturas": "factura",
+    "boleta": "factura",
+    "ips": "ip",
+    "comprobantes": "comprobante",
+    "pago": "comprobante",
+    "comprobantes": "comprobante",
+}
+
+
 # ---------------------------
 # LIFESPAN
 # ---------------------------
@@ -125,13 +220,20 @@ def agregar_a_whitelist(chat_id: int) -> bool:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log_debug("=== APP INICIADA: arrancando polling en background ===")
+    from db import init_db
+    init_db()
     asyncio.create_task(polling_loop())
+    # asyncio.create_task(naps_background_loop())  # deshabilitado temporalmente
+    # asyncio.create_task(sync_clientes_loop())    # deshabilitado temporalmente
+    asyncio.create_task(opa_poller.opa_polling_loop())
     yield
     log_debug("=== APP DETENIDA ===")
 
 
 app = FastAPI(lifespan=lifespan)
-
+app.mount("/static", StaticFiles(directory="static"), name="static")
+app.include_router(mapa_router.router)
+app.include_router(comprobantes_router.router)
 
 # ---------------------------
 # WISPRO API
@@ -241,12 +343,50 @@ def send_message(chat_id: int, text: str):
                   data={"chat_id": chat_id, "text": text})
 
 
-def send_document(chat_id: int, pdf_bytes: bytes, filename: str):
-    log_debug(f"[TELEGRAM OUT] PDF '{filename}' → chat_id={chat_id}")
+def descargar_foto_telegram(file_id: str) -> bytes | None:
+    """Descarga una foto de Telegram dado su file_id."""
+    res = requests.get(f"{TELEGRAM_API}/getFile", params={"file_id": file_id}, timeout=10)
+    file_path = res.json().get("result", {}).get("file_path")
+    if not file_path:
+        return None
+    url = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}/{file_path}"
+    r = requests.get(url, timeout=15)
+    return r.content if r.status_code == 200 else None
+
+
+def analizar_foto_telegram(msg_obj: dict) -> str:
+    """Descarga la foto de mayor resolución y la analiza con Claude."""
+    from routers.comprobantes import _analizar_imagen, _veredicto
+
+    fotos = msg_obj.get("photo", [])
+    file_id = fotos[-1]["file_id"]
+
+    contenido = descargar_foto_telegram(file_id)
+    if not contenido:
+        return "No pude descargar la imagen. Intentá de nuevo."
+
+    analisis = _analizar_imagen(contenido)
+    resultado, motivo = _veredicto(analisis, monto_esperado=None)
+
+    monto    = analisis.get("monto_detectado") or "no detectado"
+    fecha    = analisis.get("fecha_detectada") or "no detectada"
+    dest_ok  = "si" if analisis.get("destinatario_ok") else "NO"
+
+    return (
+        f"Comprobante analizado: {resultado}\n"
+        f"Destinatario correcto: {dest_ok}\n"
+        f"Monto: {monto}\n"
+        f"Fecha: {fecha}\n"
+        f"Motivo: {motivo}"
+    )
+
+
+def send_document(chat_id: int, doc_bytes: bytes, filename: str, mime_type: str = "application/pdf"):
+    log_debug(f"[TELEGRAM OUT] doc '{filename}' → chat_id={chat_id}")
     requests.post(
         f"{TELEGRAM_API}/sendDocument",
         data={"chat_id": chat_id},
-        files={"document": (filename, pdf_bytes, "application/pdf")}
+        files={"document": (filename, doc_bytes, mime_type)}
     )
 
 
@@ -643,6 +783,24 @@ async def polling_loop():
                     nombre_usuario = from_obj.get(
                         "first_name", "").strip() or "empleado"
 
+                    # --- FOTO: análisis de comprobante ---
+                    if "photo" in msg_obj:
+                        if not es_autorizado(chat_id):
+                            await loop.run_in_executor(None, lambda: send_message(
+                                chat_id,
+                                f"Hola {nombre_usuario}, no tenés acceso a Fiboxito.\n"
+                                f"Pedile a un admin que ejecute:\n/agregar {chat_id}"
+                            ))
+                            continue
+
+                        log_debug(f"[TELEGRAM IN] chat_id={chat_id} ({nombre_usuario}) → foto recibida")
+                        respuesta_foto = await loop.run_in_executor(
+                            None, lambda: analizar_foto_telegram(msg_obj)
+                        )
+                        await loop.run_in_executor(None, lambda r=respuesta_foto: send_message(chat_id, r))
+                        log_conversacion(chat_id, nombre_usuario, "[foto]", respuesta_foto)
+                        continue
+
                     if not text:
                         continue
 
@@ -658,13 +816,15 @@ async def polling_loop():
                             continue
 
                         partes = text.strip().split()
-                        if len(partes) != 2 or not partes[1].isdigit():
+                        try:
+                            nuevo_id = int(partes[1]) if len(partes) == 2 else None
+                            if nuevo_id is None:
+                                raise ValueError
+                        except ValueError:
                             await loop.run_in_executor(None, lambda: send_message(
                                 chat_id, "Uso: /agregar <chat_id>\nEjemplo: /agregar 1024169379"
                             ))
                             continue
-
-                        nuevo_id = int(partes[1])
                         agregado = agregar_a_whitelist(nuevo_id)
                         msg_resp = f"✅ chat_id {nuevo_id} agregado correctamente." if agregado \
                             else f"⚠️ El chat_id {nuevo_id} ya estaba en la lista."
@@ -681,6 +841,44 @@ async def polling_loop():
                         ))
                         log_debug(
                             f"[ACCESO DENEGADO] chat_id={chat_id} ({nombre_usuario})")
+                        continue
+
+                    # --- COMANDO /manual ---
+                    if text.startswith("/manual"):
+                        try:
+                            with open(MANUAL_FILE, "rb") as f:
+                                manual_bytes = f.read()
+                            await loop.run_in_executor(
+                                None,
+                                lambda: send_document(chat_id, manual_bytes, "manual_fiboxito.txt", "text/plain")
+                            )
+                        except FileNotFoundError:
+                            await loop.run_in_executor(None, lambda: send_message(
+                                chat_id, "No encontré el archivo del manual. Avisale al admin."
+                            ))
+                        log_debug(f"[CMD] /manual → chat_id={chat_id}")
+                        continue
+
+                    # --- COMANDO /help ---
+                    if text.startswith("/help"):
+                        partes = text.strip().split(maxsplit=1)
+                        if len(partes) == 1:
+                            temas_lista = " · ".join(AYUDA_TEMAS.keys())
+                            resp_help = (
+                                f"Uso: /help [tema]\n\n"
+                                f"Temas disponibles:\n{temas_lista}\n\n"
+                                f"Ejemplo: /help cliente"
+                            )
+                        else:
+                            tema = partes[1].strip().lower()
+                            tema = AYUDA_ALIAS.get(tema, tema)
+                            resp_help = AYUDA_TEMAS.get(
+                                tema,
+                                f"No encontré ayuda para '{tema}'.\n"
+                                f"Temas disponibles: {' · '.join(AYUDA_TEMAS.keys())}"
+                            )
+                        await loop.run_in_executor(None, lambda r=resp_help: send_message(chat_id, r))
+                        log_debug(f"[CMD] /help → chat_id={chat_id} tema='{text}'")
                         continue
 
                     texto, pdf = await loop.run_in_executor(

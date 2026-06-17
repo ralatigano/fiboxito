@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa NAPs — Fibox</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#1a1a2e;color:#eee}
+
+    #header{height:50px;padding:0 12px;background:#16213e;display:flex;align-items:center;gap:8px;
+      border-bottom:1px solid #0f3460;position:relative;z-index:1000;overflow:visible}
+    #header h1{font-size:14px;font-weight:600;color:#e2e8f0;white-space:nowrap;flex-shrink:0}
+
+    /* búsqueda */
+    #search-wrap{position:relative;flex-shrink:0}
+    #search-input{background:#0f1f3d;border:1px solid #1e3a5f;border-radius:6px;color:#e2e8f0;
+      font-size:13px;padding:5px 10px;width:170px;outline:none}
+    #search-input:focus{border-color:#3b82f6}
+    #search-results{position:fixed;background:#1e293b;border:1px solid #334155;border-radius:6px;
+      width:220px;max-height:200px;overflow-y:auto;z-index:100000;display:none}
+    .search-item{padding:7px 12px;font-size:13px;cursor:pointer;display:flex;align-items:center;
+      gap:8px;border-bottom:1px solid #1e3a5f}
+    .search-item:last-child{border-bottom:none}
+    .search-item:hover{background:#0f3460}
+    .search-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+    /* cliente */
+    #cliente-wrap{display:flex;align-items:center;gap:5px;flex-shrink:0}
+    #cliente-input{background:#0f1f3d;border:1px solid #1e3a5f;border-radius:6px;color:#e2e8f0;
+      font-size:12px;padding:5px 8px;width:185px;outline:none}
+    #cliente-input:focus{border-color:#f59e0b}
+    #cliente-input::placeholder{color:#475569;font-size:11px}
+    .hbtn{border:none;border-radius:6px;font-size:12px;font-weight:600;padding:6px 9px;cursor:pointer;white-space:nowrap;flex-shrink:0}
+    #btn-ubicar{background:#f59e0b;color:#0f172a}
+    #btn-ubicar:hover{background:#fbbf24}
+    #btn-clear-cliente{background:#475569;color:#e2e8f0;display:none}
+    #btn-clear-cliente:hover{background:#64748b}
+
+    /* capas toggle */
+    #capas-wrap{display:flex;align-items:center;gap:4px;flex-shrink:0;margin-left:4px}
+    .capa-btn{background:#0f1f3d;border:1px solid #1e3a5f;border-radius:5px;color:#94a3b8;
+      font-size:11px;padding:4px 8px;cursor:pointer;transition:all .2s;white-space:nowrap}
+    .capa-btn.activo{color:#e2e8f0;border-color:currentColor}
+    #btn-naps.activo{color:#f59e0b}
+    #btn-clientes.activo{color:#3b82f6}
+    #btn-red.activo{color:#a855f7}
+    #btn-prospectos.activo{color:#f43f5e}
+
+    #stats{margin-left:auto;font-size:11px;color:#94a3b8;display:flex;gap:10px;flex-shrink:0}
+    .stat{display:flex;align-items:center;gap:4px;white-space:nowrap}
+    .stat-dot{width:7px;height:7px;border-radius:50%}
+
+    #map{height:calc(100vh - 50px);width:100%}
+
+    /* popups */
+    .leaflet-popup-content-wrapper{background:#1e293b;color:#e2e8f0;border:1px solid #334155;
+      border-radius:8px;box-shadow:0 4px 20px rgba(0,0,0,.5)}
+    .leaflet-popup-tip{background:#1e293b}
+    .leaflet-popup-content{margin:12px 14px;font-size:13px;line-height:1.6;min-width:180px}
+    .pnombre{font-size:14px;font-weight:600;color:#f1f5f9;margin-bottom:6px}
+    .prow{display:flex;justify-content:space-between;gap:16px;color:#94a3b8}
+    .prow span:last-child{color:#e2e8f0;font-weight:500}
+    .pdisponible{font-size:14px;font-weight:700;margin-top:5px}
+    .pbarra{margin-top:6px;height:4px;background:#334155;border-radius:2px;overflow:hidden}
+    .pbarra-fill{height:100%;border-radius:2px}
+    .pcercana{margin-top:5px;font-size:11px;color:#f59e0b;font-weight:600}
+    .pinactiva{color:#64748b;font-style:italic;font-size:12px}
+    .popup-actions{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+    .popup-btn{border:none;border-radius:4px;font-size:11px;padding:4px 8px;cursor:pointer;font-weight:600}
+    .popup-btn-detalle{background:#1e3a5f;color:#93c5fd}
+    .popup-btn-detalle:hover{background:#0f3460}
+    .popup-estado-select{background:#0f1f3d;border:1px solid #334155;border-radius:4px;
+      color:#e2e8f0;font-size:11px;padding:3px 6px;cursor:pointer;margin-top:6px;width:100%}
+    .popup-detalle-extra{margin-top:6px;font-size:12px;color:#94a3b8;border-top:1px solid #334155;padding-top:6px}
+
+    /* panel capas/import */
+    #panel{position:absolute;top:58px;right:10px;z-index:1000;background:rgba(15,23,42,.95);
+      border:1px solid #1e3a5f;border-radius:8px;padding:12px;width:220px;display:none;
+      backdrop-filter:blur(4px);font-size:12px;color:#cbd5e1}
+    #panel h3{font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;
+      letter-spacing:.6px;margin-bottom:8px}
+    .panel-sep{border-top:1px solid #1e3a5f;margin:10px 0}
+    .panel-file-row{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+    .panel-file-row label{font-size:11px;color:#94a3b8}
+    .panel-file-input{background:#0f1f3d;border:1px solid #1e3a5f;border-radius:4px;
+      color:#e2e8f0;font-size:11px;padding:3px 6px;width:100%}
+    .panel-import-btn{background:#1e3a5f;border:none;border-radius:4px;color:#93c5fd;
+      font-size:11px;padding:4px 8px;cursor:pointer;width:100%;margin-top:2px}
+    .panel-import-btn:hover{background:#0f3460}
+    .panel-msg{font-size:11px;color:#22c55e;margin-top:4px;min-height:14px}
+
+    /* leyenda */
+    .legend{background:rgba(15,23,42,.92);border:1px solid #1e3a5f;border-radius:8px;
+      padding:10px 12px;font-size:11px;color:#cbd5e1;backdrop-filter:blur(4px)}
+    .legend-title{font-size:10px;font-weight:600;color:#64748b;text-transform:uppercase;
+      letter-spacing:.6px;margin-bottom:6px}
+    .legend-item{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+    .legend-item:last-child{margin-bottom:0}
+    .legend-dot{width:11px;height:11px;border-radius:50%;border:1.5px solid rgba(255,255,255,.2);flex-shrink:0}
+    .legend-line{width:20px;height:3px;flex-shrink:0;border-radius:2px}
+    .legend-sep{border-top:1px solid #1e3a5f;margin:6px 0}
+
+    /* loading */
+    #loading{position:absolute;top:50px;left:0;right:0;bottom:0;background:rgba(15,23,42,.85);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      z-index:999;gap:12px;font-size:14px;color:#94a3b8}
+    .spinner{width:32px;height:32px;border:3px solid #1e3a5f;border-top-color:#3b82f6;
+      border-radius:50%;animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* toast */
+    #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1e293b;
+      border:1px solid #334155;border-radius:8px;padding:9px 16px;font-size:13px;color:#e2e8f0;
+      z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;
+      box-shadow:0 4px 20px rgba(0,0,0,.4)}
+    #toast.show{opacity:1}
+
+    /* medición */
+    #btn-medir{position:absolute;top:114px;left:10px;z-index:1000;background:#16213e;
+      border:1px solid #1e3a5f;border-radius:6px;padding:6px 10px;font-size:12px;
+      color:#e2e8f0;cursor:pointer;user-select:none;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+    #label-medicion{position:absolute;top:114px;left:84px;z-index:1000;background:#0f172a;
+      border:1px solid #f59e0b;border-radius:6px;padding:5px 10px;font-size:12px;
+      color:#f59e0b;display:none;pointer-events:none}
+
+    /* Leaflet.Draw overrides: vértices circulares pequeños */
+  .leaflet-editing-icon {
+    border-radius: 50% !important;
+    width: 8px !important;
+    height: 8px !important;
+    margin-left: -4px !important;
+    margin-top: -4px !important;
+    background: #f59e0b !important;
+    border: 2px solid white !important;
+  }
+  /* Ocultar tooltip nativo de Leaflet.Draw (lo reemplazamos con toast) */
+  .leaflet-draw-tooltip { display: none !important; }
+    #panel-tramo{position:absolute;bottom:30px;left:50%;transform:translateX(-50%);z-index:1000;
+      background:rgba(15,23,42,.95);border:1px solid #f59e0b;border-radius:8px;
+      padding:10px 14px;font-size:12px;color:#e2e8f0;display:none;gap:8px;align-items:center;
+      backdrop-filter:blur(4px);white-space:nowrap}
+    #panel-tramo input,#panel-tramo select{background:#0f1f3d;border:1px solid #334155;
+      border-radius:4px;color:#e2e8f0;font-size:12px;padding:4px 7px}
+    #panel-tramo button{border:none;border-radius:4px;font-size:12px;font-weight:600;
+      padding:5px 10px;cursor:pointer}
+    #btn-guardar-tramo{background:#22c55e;color:#0f172a}
+    #btn-cancelar-tramo{background:#475569;color:#e2e8f0}
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <h1>📡 Fibox</h1>
+
+  <div id="search-wrap">
+    <input id="search-input" type="text" placeholder="🔍 Buscar NAP..." autocomplete="off"/>
+    <div id="search-results"></div>
+  </div>
+
+  <div id="cliente-wrap">
+    <input id="cliente-input" type="text" placeholder="📍 Link WhatsApp o lat,lng"/>
+    <button class="hbtn" id="btn-ubicar">Ubicar</button>
+    <button class="hbtn" id="btn-clear-cliente">✕</button>
+  </div>
+
+  <div id="capas-wrap">
+    <button class="capa-btn activo" id="btn-naps"       onclick="toggleCapa('naps')">NAPs</button>
+    <button class="capa-btn activo" id="btn-clientes"   onclick="toggleCapa('clientes')">Clientes</button>
+    <button class="capa-btn activo" id="btn-red"        onclick="toggleCapa('red')">Red</button>
+    <button class="capa-btn activo" id="btn-prospectos" onclick="toggleCapa('prospectos')">Prospectos</button>
+    <button class="capa-btn" id="btn-panel" onclick="togglePanel()">⚙</button>
+  </div>
+
+  <div id="stats">Cargando...</div>
+</div>
+
+<div id="map"></div>
+<div id="loading"><div class="spinner"></div>Cargando datos...</div>
+<div id="toast"></div>
+
+<!-- Panel configuración / importación -->
+<div id="panel">
+  <h3>Importar datos</h3>
+  <div class="panel-file-row">
+    <label>CSV Clientes</label>
+    <input type="file" class="panel-file-input" id="file-clientes" accept=".csv"/>
+    <button class="panel-import-btn" onclick="importarCSV('clientes')">Importar</button>
+    <div class="panel-msg" id="msg-clientes"></div>
+  </div>
+  <div class="panel-file-row">
+    <label>CSV Red / Tramos</label>
+    <input type="file" class="panel-file-input" id="file-red" accept=".csv"/>
+    <button class="panel-import-btn" onclick="importarCSV('red')">Importar</button>
+    <div class="panel-msg" id="msg-red"></div>
+  </div>
+  <div class="panel-sep"></div>
+  <h3>Sync Wispro</h3>
+  <button class="panel-import-btn" onclick="syncClientes()">🔄 Sync clientes ahora</button>
+  <div class="panel-msg" id="msg-sync"></div>
+  <div class="panel-sep"></div>
+  <h3>Nuevo tramo de red</h3>
+  <button class="panel-import-btn" onclick="iniciarDibujoTramo()">✏️ Dibujar tramo</button>
+</div>
+
+<!-- Panel guardar tramo dibujado -->
+<div id="panel-tramo" style="display:none;flex-direction:row">
+  <span>Nuevo tramo:</span>
+  <input id="tramo-nombre" type="text" placeholder="Nombre" style="width:130px"/>
+  <select id="tramo-tipo">
+    <option value="troncal">Troncal</option>
+    <option value="oval">Oval</option>
+    <option value="drop" selected>Drop</option>
+  </select>
+  <button id="btn-guardar-tramo" onclick="guardarTramo()">Guardar</button>
+  <button id="btn-cancelar-tramo" onclick="cancelarTramo()">Cancelar</button>
+</div>
+
+<div id="btn-medir">📐 Medir</div>
+<div id="label-medicion"></div>
+
+<script>
+// ═══════════════════════════════════════════
+// MAPA BASE
+// ═══════════════════════════════════════════
+const map = L.map('map',{zoomControl:true}).setView([-25.2800,-65.4800],15);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+  {attribution:'Tiles © Esri',maxZoom:20}).addTo(map);
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+  {maxZoom:20,opacity:.75}).addTo(map);
+
+// ═══════════════════════════════════════════
+// LAYER GROUPS
+// ═══════════════════════════════════════════
+const layerNaps       = L.layerGroup().addTo(map);
+const layerClientes   = L.layerGroup().addTo(map);
+const layerRed        = L.layerGroup().addTo(map);
+const layerCliente    = L.layerGroup().addTo(map); // marcador cliente puntual
+const layerMedicion   = L.layerGroup().addTo(map);
+const layerProspectos = L.layerGroup().addTo(map);
+
+const capasActivas = {naps:true, clientes:true, red:true, prospectos:true};
+
+function toggleCapa(nombre) {
+  capasActivas[nombre] = !capasActivas[nombre];
+  const lg = {naps:layerNaps, clientes:layerClientes, red:layerRed, prospectos:layerProspectos}[nombre];
+  if (capasActivas[nombre]) map.addLayer(lg); else map.removeLayer(lg);
+  document.getElementById('btn-'+nombre).classList.toggle('activo', capasActivas[nombre]);
+}
+
+function togglePanel() {
+  const p = document.getElementById('panel');
+  p.style.display = p.style.display === 'block' ? 'none' : 'block';
+}
+
+// ═══════════════════════════════════════════
+// COLORES NAPs
+// ═══════════════════════════════════════════
+function getNapColor(available,capacity,inactive) {
+  if(inactive||capacity===0) return '#475569';
+  const r=available/capacity;
+  if(r<=0)     return '#ef4444';
+  if(r<=0.125) return '#f97316';
+  if(r<=0.375) return '#eab308';
+  if(r<=0.625) return '#84cc16';
+  return '#22c55e';
+}
+
+function makeNapIcon(color,highlight=false) {
+  const ring = highlight ? `<circle cx="15" cy="15" r="14.5" fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="4,2"/>` : '';
+  return L.divIcon({
+    html:`<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30">
+      ${ring}
+      <circle cx="15" cy="15" r="13" fill="${color}" stroke="rgba(255,255,255,.9)" stroke-width="2"/>
+      <line x1="19" y1="10" x2="10" y2="19" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+      <polyline points="10,14 10,19 15,19" fill="none" stroke="white" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>`,
+    className:'',iconSize:[30,30],iconAnchor:[15,15],popupAnchor:[0,-18]
+  });
+}
+
+// ═══════════════════════════════════════════
+// ÍCONOS CLIENTES
+// ═══════════════════════════════════════════
+const ICONOS = {
+  check:    (c) => `<circle cx="12" cy="12" r="10" fill="${c}" stroke="white" stroke-width="1.5"/><polyline points="8,12 11,15 16,9" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/>`,
+  question: (c) => `<circle cx="12" cy="12" r="10" fill="${c}" stroke="white" stroke-width="1.5"/><text x="12" y="17" text-anchor="middle" fill="white" font-size="13" font-weight="bold">?</text>`,
+  minus:    (c) => `<circle cx="12" cy="12" r="10" fill="${c}" stroke="white" stroke-width="1.5"/><line x1="8" y1="12" x2="16" y2="12" stroke="white" stroke-width="2" stroke-linecap="round"/>`,
+  alert:    (c) => `<circle cx="12" cy="12" r="10" fill="${c}" stroke="white" stroke-width="1.5"/><text x="12" y="17" text-anchor="middle" fill="white" font-size="14" font-weight="bold">!</text>`,
+  x:        (c) => `<circle cx="12" cy="12" r="10" fill="${c}" stroke="white" stroke-width="1.5"/><line x1="8" y1="8" x2="16" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/><line x1="16" y1="8" x2="8" y2="16" stroke="white" stroke-width="2" stroke-linecap="round"/>`,
+  clock:    (c) => `<circle cx="12" cy="12" r="10" fill="${c}" stroke="white" stroke-width="1.5"/><circle cx="12" cy="12" r="4" fill="none" stroke="white" stroke-width="1.5"/><line x1="12" y1="8" x2="12" y2="12" stroke="white" stroke-width="1.5" stroke-linecap="round"/>`,
+  star:     (c) => `<circle cx="12" cy="12" r="10" fill="${c}" stroke="white" stroke-width="1.5"/><polygon points="12,6 13.5,10.5 18,10.5 14.5,13.5 15.5,18 12,15.5 8.5,18 9.5,13.5 6,10.5 10.5,10.5" fill="white"/>`,
+  calendar: (c) => `<circle cx="12" cy="12" r="10" fill="${c}" stroke="white" stroke-width="1.5"/><rect x="8" y="9" width="8" height="7" rx="1" fill="none" stroke="white" stroke-width="1.5"/><line x1="8" y1="11.5" x2="16" y2="11.5" stroke="white" stroke-width="1"/><line x1="10" y1="8" x2="10" y2="10" stroke="white" stroke-width="1.5" stroke-linecap="round"/><line x1="14" y1="8" x2="14" y2="10" stroke="white" stroke-width="1.5" stroke-linecap="round"/>`,
+  circle:   (c) => `<circle cx="12" cy="12" r="10" fill="${c}" stroke="white" stroke-width="1.5"/>`,
+};
+
+function makeClienteIcon(color, icono) {
+  const fn = ICONOS[icono] || ICONOS.circle;
+  return L.divIcon({
+    html:`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">${fn(color)}</svg>`,
+    className:'',iconSize:[24,24],iconAnchor:[12,12],popupAnchor:[0,-14]
+  });
+}
+
+const clientePinIcon = L.divIcon({
+  html:`<svg xmlns="http://www.w3.org/2000/svg" width="36" height="44" viewBox="0 0 36 44">
+    <ellipse cx="18" cy="41" rx="7" ry="3" fill="rgba(0,0,0,.3)"/>
+    <path d="M18 2C10 2 4 8 4 16C4 26 18 42 18 42C18 42 32 26 32 16C32 8 26 2 18 2Z" fill="#f59e0b" stroke="white" stroke-width="2"/>
+    <circle cx="18" cy="16" r="6" fill="white"/>
+  </svg>`,
+  className:'',iconSize:[36,44],iconAnchor:[18,42],popupAnchor:[0,-44]
+});
+
+// ═══════════════════════════════════════════
+// COLORES DE RED
+// ═══════════════════════════════════════════
+const RED_ESTILOS = {
+  troncal: {color:'#a855f7', weight:4, dashArray:null},
+  oval:    {color:'#38bdf8', weight:2.5, dashArray:'8,4'},
+  drop:    {color:'#94a3b8', weight:1.5, dashArray:'4,4'},
+};
+
+// ═══════════════════════════════════════════
+// ESTADO GLOBAL
+// ═══════════════════════════════════════════
+let allNaps=[], napMarkers={}, estadosMap={};
+let clienteMarker=null, clienteCircle=null;
+const RADIO=120;
+
+// ═══════════════════════════════════════════
+// UTILIDADES
+// ═══════════════════════════════════════════
+function dist(lat1,lng1,lat2,lng2) {
+  const R=6371000, dLat=(lat2-lat1)*Math.PI/180, dLng=(lng2-lng1)*Math.PI/180;
+  const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function fmtDist(m){return m>=1000?(m/1000).toFixed(2)+' km':Math.round(m)+' m'}
+
+function toast(msg,ms=3500) {
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),ms);
+}
+
+// ═══════════════════════════════════════════
+// MEDICIÓN
+// ═══════════════════════════════════════════
+let midiendo=false, medPuntos=[], medLineas=[], medMarkers=[], medTotal=0;
+
+function limpiarMedicion() {
+  medLineas.forEach(l=>layerMedicion.removeLayer(l));
+  medMarkers.forEach(m=>layerMedicion.removeLayer(m));
+  medLineas=[]; medMarkers=[]; medPuntos=[]; medTotal=0;
+}
+
+document.getElementById('btn-medir').addEventListener('click', e=>{
+  e.stopPropagation();
+  midiendo=!midiendo;
+  const btn=document.getElementById('btn-medir');
+  const lbl=document.getElementById('label-medicion');
+  if(midiendo){
+    limpiarMedicion();
+    btn.style.cssText+='background:#f59e0b;color:#0f172a';
+    btn.textContent='✕ Cancelar';
+    lbl.style.display='block';
+    lbl.textContent='Clic para marcar puntos · Doble clic para terminar';
+    map.getContainer().style.cursor='crosshair';
+  } else {
+    limpiarMedicion();
+    btn.style.cssText+='background:#16213e;color:#e2e8f0';
+    btn.textContent='📐 Medir';
+    lbl.style.display='none';
+    map.getContainer().style.cursor='';
+  }
+});
+
+map.on('click', e=>{
+  if(!midiendo) return;
+  const p={lat:e.latlng.lat,lng:e.latlng.lng};
+  medPuntos.push(p);
+  const dot=L.circleMarker([p.lat,p.lng],{radius:4,color:'#f59e0b',fillColor:'#f59e0b',fillOpacity:1,weight:2});
+  layerMedicion.addLayer(dot); medMarkers.push(dot);
+  if(medPuntos.length>1){
+    const prev=medPuntos[medPuntos.length-2];
+    medTotal+=dist(prev.lat,prev.lng,p.lat,p.lng);
+    const line=L.polyline([[prev.lat,prev.lng],[p.lat,p.lng]],{color:'#f59e0b',weight:2,dashArray:'6,4'});
+    layerMedicion.addLayer(line); medLineas.push(line);
+    document.getElementById('label-medicion').textContent=`Total: ${fmtDist(medTotal)} · Doble clic para terminar`;
+  }
+});
+
+map.on('dblclick', e=>{
+  if(!midiendo) return;
+  midiendo=false;
+  const btn=document.getElementById('btn-medir');
+  btn.style.cssText+='background:#16213e;color:#e2e8f0';
+  btn.textContent='📐 Medir';
+  map.getContainer().style.cursor='';
+  const lbl=document.getElementById('label-medicion');
+  if(medTotal>0){lbl.textContent=`📐 ${fmtDist(medTotal)} · Clic en Medir para nueva medición`}
+  else{lbl.style.display='none'}
+});
+
+// ═══════════════════════════════════════════
+// LEAFLET.DRAW — dibujo de tramos
+// ═══════════════════════════════════════════
+const drawnItems = new L.FeatureGroup().addTo(map);
+const drawControl = new L.Control.Draw({
+  draw:{
+    polyline:{shapeOptions:{color:'#f59e0b',weight:3}},
+    polygon:false, rectangle:false, circle:false, marker:false, circlemarker:false
+  },
+  edit:{featureGroup:drawnItems, edit:false, remove:false}
+});
+
+let tramoTempLayer = null;
+
+map.on(L.Draw.Event.CREATED, e=>{
+  tramoTempLayer = e.layer;
+  drawnItems.addLayer(tramoTempLayer);
+  const pt = document.getElementById('panel-tramo');
+  pt.style.display='flex';
+  drawControl.remove(map);
+  togglePanel(); // cierra panel
+});
+
+function iniciarDibujoTramo() {
+  togglePanel();
+  drawControl.addTo(map);
+  new L.Draw.Polyline(map,{shapeOptions:{color:'#f59e0b',weight:3}}).enable();
+  toast('Dibujá el tramo. Doble clic para terminar.');
+}
+
+function cancelarTramo() {
+  if(window._editandoTramo){
+    try{ window._editandoTramo.editHandler.disable(); }catch(e){}
+    window._editandoTramo = null;
+    tramoEditandoId = null;
+  }
+  if(tramoEditLayer){ drawnItems.removeLayer(tramoEditLayer); tramoEditLayer=null; }
+  if(tramoTempLayer){ drawnItems.removeLayer(tramoTempLayer); tramoTempLayer=null; }
+  drawControl.remove(map);
+  document.getElementById('panel-tramo').style.display='none';
+  map.getContainer().style.cursor='';
+  cargarRed(); // restaura las líneas originales
+}
+
+async function guardarTramo() {
+  if(!tramoTempLayer) return;
+  const coords = tramoTempLayer.getLatLngs().map(ll=>[ll.lat,ll.lng]);
+  const nombre = document.getElementById('tramo-nombre').value || 'Tramo';
+  const tipo   = document.getElementById('tramo-tipo').value;
+  const resp = await fetch('/api/tramos',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({coords,nombre,tipo})
+  });
+  if(resp.ok){
+    cancelarTramo();
+    await cargarRed();
+    toast('✅ Tramo guardado');
+  }
+}
+
+// ═══════════════════════════════════════════
+// POPUP NAP
+// ═══════════════════════════════════════════
+function buildNapPopup(nap, cercana=false) {
+  const color=getNapColor(nap.available,nap.capacity,nap.inactive);
+  const pct=nap.capacity>0?Math.round(nap.contracts/nap.capacity*100):0;
+  return `<div class="pnombre">${nap.name}</div>
+    ${nap.inactive?'<div class="pinactiva">⚠️ No instalada</div>':`
+    <div class="prow"><span>Capacidad</span><span>${nap.capacity} puertos</span></div>
+    <div class="prow"><span>Contratos</span><span>${nap.contracts}</span></div>
+    <div class="pdisponible" style="color:${color}">
+      ${nap.available>0?`✅ ${nap.available} libre${nap.available>1?'s':''}`:'🔴 Sin disponibilidad'}
+    </div>
+    <div class="pbarra"><div class="pbarra-fill" style="width:${pct}%;background:${color}"></div></div>
+    ${cercana?'<div class="pcercana">📍 Cercana al cliente</div>':''}`}`;
+}
+
+// ═══════════════════════════════════════════
+// POPUP CLIENTE
+// ═══════════════════════════════════════════
+function buildClientePopup(c) {
+  const estado = c.estado_nombre || 'Sin estado';
+  const color  = c.estado_color  || '#94a3b8';
+  return `
+    <div class="pnombre">${c.nombre||'Cliente'}</div>
+    ${c.descripcion?`<div class="prow"><span>Ref.</span><span>${c.descripcion}</span></div>`:''}
+    ${c.wispro_id?`<div class="prow"><span>ID Wispro</span><span>#${c.wispro_id}</span></div>`:''}
+    <div class="prow" style="margin-top:4px"><span>Estado</span>
+      <span style="color:${color};font-weight:700">${estado}</span></div>
+    <select class="popup-estado-select" onchange="cambiarEstado(${c.id},this.value)">
+      <option value="">— Cambiar estado —</option>
+      ${Object.values(estadosMap).map(e=>`<option value="${e.nombre}" ${e.nombre===estado?'selected':''}>${e.nombre}</option>`).join('')}
+    </select>
+    <div class="popup-actions">
+      ${c.wispro_id?`<button class="popup-btn popup-btn-detalle" onclick="verDetalleWispro(${c.id},this)">Ver en Wispro</button>`:''}
+      <button class="popup-btn" style="background:#3f1f1f;color:#fca5a5" onclick="eliminarCliente(${c.id})">Eliminar</button>
+    </div>
+    <div id="detalle-${c.id}" class="popup-detalle-extra" style="display:none"></div>`;
+}
+
+async function cambiarEstado(clienteId, estadoNombre) {
+  if(!estadoNombre) return;
+  await fetch(`/api/clientes/${clienteId}/estado`,{
+    method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({estado_nombre:estadoNombre})
+  });
+  await cargarClientes();
+  toast(`Estado actualizado: ${estadoNombre}`);
+}
+
+async function eliminarCliente(clienteId) {
+  if(!confirm('¿Eliminar este cliente del mapa?')) return;
+  await fetch(`/api/clientes/${clienteId}`,{method:'DELETE'});
+  await cargarClientes();
+  toast('Cliente eliminado');
+}
+
+async function verDetalleWispro(clienteId, btn) {
+  const div = document.getElementById(`detalle-${clienteId}`);
+  if(div.style.display==='block'){div.style.display='none'; btn.textContent='Ver en Wispro'; return}
+  btn.textContent='Cargando...';
+  try {
+    const r = await fetch(`/api/clientes/${clienteId}/detalle`);
+    const d = await r.json();
+    const c = d.cliente;
+    const contrato = d.contratos[0]||{};
+    const factura  = d.facturas[0]||{};
+    div.innerHTML=`
+      <div class="prow"><span>Plan</span><span>${contrato.plan_name||'N/A'}</span></div>
+      <div class="prow"><span>Contrato</span><span>${contrato.state||'N/A'}</span></div>
+      <div class="prow"><span>Teléfono</span><span>${c.phone||'N/A'}</span></div>
+      ${factura.amount?`<div class="prow"><span>Última factura</span><span>$${factura.amount} — ${factura.state||''}</span></div>`:''}`;
+    div.style.display='block';
+    btn.textContent='Ocultar';
+  } catch(e){ btn.textContent='Error'; }
+}
+
+// ═══════════════════════════════════════════
+// CERCANAS (cliente puntual)
+// ═══════════════════════════════════════════
+function actualizarCercanas(lat,lng) {
+  allNaps.forEach(nap=>{
+    const cercana = dist(lat,lng,nap.lat,nap.lng)<=RADIO && !nap.inactive;
+    const color   = getNapColor(nap.available,nap.capacity,nap.inactive);
+    const entry   = napMarkers[nap.id];
+    if(!entry) return;
+    entry.marker.setIcon(makeNapIcon(color,cercana));
+    entry.marker.setPopupContent(buildNapPopup(nap,cercana));
+  });
+}
+function resetCercanas() {
+  allNaps.forEach(nap=>{
+    const color=getNapColor(nap.available,nap.capacity,nap.inactive);
+    napMarkers[nap.id]?.marker.setIcon(makeNapIcon(color,false));
+    napMarkers[nap.id]?.marker.setPopupContent(buildNapPopup(nap,false));
+  });
+}
+
+function parsearUbicacion(input) {
+  input=input.trim();
+  let m=input.match(/[?&@](?:q=)?(-?\d+\.\d+)[,\s]+(-?\d+\.\d+)/);
+  if(m) return{lat:parseFloat(m[1]),lng:parseFloat(m[2])};
+  m=input.match(/^(-?\d+\.?\d*)[,\s]+(-?\d+\.?\d*)$/);
+  if(m) return{lat:parseFloat(m[1]),lng:parseFloat(m[2])};
+  return null;
+}
+
+function ubicarCliente(lat,lng) {
+  layerCliente.clearLayers();
+  const tieneCaja = allNaps.some(n=>!n.inactive&&n.available>0&&dist(lat,lng,n.lat,n.lng)<=RADIO);
+  const popupHtml = `
+    <div class="pnombre">📍 Ubicación</div>
+    <div style="color:#94a3b8;font-size:12px;margin-bottom:6px">${lat.toFixed(5)}, ${lng.toFixed(5)}</div>
+    ${tieneCaja
+      ? '<div style="color:#22c55e;font-size:12px;font-weight:600">✅ Tiene cajas disponibles cercanas</div>'
+      : '<div style="color:#ef4444;font-size:12px;font-weight:600">⚠️ Sin cajas disponibles en '+ RADIO +'m</div>'}
+    <div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
+      <input id="prosp-tel" type="text" placeholder="Teléfono (opcional)"
+        style="background:#0f1f3d;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;padding:4px 7px"/>
+      <input id="prosp-nota" type="text" placeholder="Nota (opcional)"
+        style="background:#0f1f3d;border:1px solid #334155;border-radius:4px;color:#e2e8f0;font-size:12px;padding:4px 7px"/>
+      <button class="popup-btn" style="background:#f43f5e;color:white;margin-top:2px"
+        onclick="guardarProspecto(${lat},${lng})">💾 Guardar prospecto</button>
+    </div>`;
+  clienteMarker = L.marker([lat,lng],{icon:clientePinIcon}).bindPopup(popupHtml);
+  clienteCircle = L.circle([lat,lng],{radius:RADIO,color:'#f59e0b',fillColor:'#f59e0b',fillOpacity:.06,weight:1.5,dashArray:'5,5'});
+  layerCliente.addLayer(clienteMarker);
+  layerCliente.addLayer(clienteCircle);
+  map.setView([lat,lng],17);
+  actualizarCercanas(lat,lng);
+  document.getElementById('btn-clear-cliente').style.display='inline-block';
+  toast(tieneCaja?`✅ NAPs disponibles en ${RADIO}m`:`⚠️ Sin NAPs disponibles en ${RADIO}m`,4000);
+}
+
+async function guardarProspecto(lat,lng) {
+  const tieneCaja = allNaps.some(n=>!n.inactive&&n.available>0&&dist(lat,lng,n.lat,n.lng)<=RADIO);
+  const tel  = document.getElementById('prosp-tel')?.value  || '';
+  const nota = document.getElementById('prosp-nota')?.value || '';
+  const r = await fetch('/api/prospectos',{
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({lat, lng, telefono:tel, nota, tiene_caja:tieneCaja})
+  });
+  if(r.ok){
+    layerCliente.clearLayers();
+    document.getElementById('cliente-input').value='';
+    document.getElementById('btn-clear-cliente').style.display='none';
+    resetCercanas();
+    await cargarProspectos();
+    toast('✅ Prospecto guardado');
+  }
+}
+
+document.getElementById('btn-ubicar').addEventListener('click',()=>{
+  const val=document.getElementById('cliente-input').value;
+  if(!val.trim()){toast('Pegá un link o coordenadas');return}
+  const c=parsearUbicacion(val);
+  if(!c){toast('❌ Formato no reconocido. Usá: -25.280, -65.480');return}
+  ubicarCliente(c.lat,c.lng);
+});
+document.getElementById('cliente-input').addEventListener('keydown',e=>{
+  if(e.key==='Enter') document.getElementById('btn-ubicar').click();
+});
+document.getElementById('btn-clear-cliente').addEventListener('click',()=>{
+  layerCliente.clearLayers();
+  document.getElementById('cliente-input').value='';
+  document.getElementById('btn-clear-cliente').style.display='none';
+  resetCercanas();
+});
+
+// ═══════════════════════════════════════════
+// BÚSQUEDA NAP
+// ═══════════════════════════════════════════
+const searchInput=document.getElementById('search-input');
+const searchResults=document.getElementById('search-results');
+let searchMatches=[];
+
+function posicionarDropdown(){
+  const r=searchInput.getBoundingClientRect();
+  searchResults.style.top=(r.bottom+4)+'px';
+  searchResults.style.left=r.left+'px';
+}
+function seleccionarNap(nap){
+  map.setView([nap.lat,nap.lng],17);
+  napMarkers[nap.id]?.marker.openPopup();
+  searchResults.style.display='none';
+  searchInput.value=nap.name;
+}
+searchInput.addEventListener('input',()=>{
+  const q=searchInput.value.trim().toLowerCase();
+  searchResults.innerHTML=''; searchMatches=[];
+  if(q.length<2){searchResults.style.display='none';return}
+  searchMatches=allNaps.filter(n=>n.name.toLowerCase().includes(q)).slice(0,10);
+  if(!searchMatches.length){searchResults.style.display='none';return}
+  searchMatches.forEach(nap=>{
+    const color=getNapColor(nap.available,nap.capacity,nap.inactive);
+    const div=document.createElement('div');
+    div.className='search-item';
+    div.innerHTML=`<span class="search-dot" style="background:${color}"></span>${nap.name}
+      <span style="margin-left:auto;color:#64748b;font-size:11px">${nap.available}/${nap.capacity}</span>`;
+    div.addEventListener('click',()=>seleccionarNap(nap));
+    searchResults.appendChild(div);
+  });
+  posicionarDropdown();
+  searchResults.style.display='block';
+});
+searchInput.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&searchMatches.length>0) seleccionarNap(searchMatches[0]);
+});
+document.addEventListener('click',e=>{
+  if(!document.getElementById('search-wrap').contains(e.target))
+    searchResults.style.display='none';
+});
+
+// ═══════════════════════════════════════════
+// CARGA DE DATOS
+// ═══════════════════════════════════════════
+async function cargarNaps() {
+  const naps = await fetch('/api/naps').then(r=>r.json());
+  layerNaps.clearLayers(); napMarkers={}; allNaps=naps;
+  let conDispo=0,llenas=0,libres=0;
+  naps.forEach(nap=>{
+    const color=getNapColor(nap.available,nap.capacity,nap.inactive);
+    const marker=L.marker([nap.lat,nap.lng],{icon:makeNapIcon(color)}).bindPopup(buildNapPopup(nap));
+    layerNaps.addLayer(marker);
+    napMarkers[nap.id]={marker,nap};
+    if(!nap.inactive){libres+=nap.available;if(nap.available>0)conDispo++;else llenas++}
+  });
+  return {conDispo,llenas,libres};
+}
+
+async function cargarEstados() {
+  const estados=await fetch('/api/estados').then(r=>r.json());
+  estadosMap={};
+  estados.forEach(e=>estadosMap[e.id]=e);
+  return estados;
+}
+
+async function cargarClientes() {
+  await cargarEstados();
+  const clientes=await fetch('/api/clientes').then(r=>r.json());
+  layerClientes.clearLayers();
+  clientes.forEach(c=>{
+    const color=c.estado_color||'#94a3b8';
+    const icono=c.estado_icono||'circle';
+    const marker=L.marker([c.lat,c.lng],{icon:makeClienteIcon(color,icono)}).bindPopup(buildClientePopup(c));
+    layerClientes.addLayer(marker);
+  });
+  return clientes.length;
+}
+
+async function cargarRed() {
+  const tramos=await fetch('/api/tramos').then(r=>r.json());
+  layerRed.clearLayers();
+  tramos.forEach(t=>{
+    const estilo=RED_ESTILOS[t.tipo]||RED_ESTILOS.drop;
+    const linea=L.polyline(t.coords,{...estilo});
+    linea.bindPopup(buildTramoPopup(t));
+    layerRed.addLayer(linea);
+  });
+  return tramos.length;
+}
+
+async function eliminarTramo(id) {
+  if(!confirm('¿Eliminar este tramo?')) return;
+  await fetch(`/api/tramos/${id}`,{method:'DELETE'});
+  await cargarRed();
+  toast('Tramo eliminado');
+}
+
+// Edición de tramo existente
+let tramoEditandoId = null;
+let tramoEditLayer  = null;
+
+async function editarTramo(id, coords, nombre, tipo) {
+  // Si ya estaba editando otro, cancelar
+  if(tramoEditLayer){ map.removeLayer(tramoEditLayer); tramoEditLayer=null; }
+
+  tramoEditandoId = id;
+  // Crear polyline editable temporal en drawnItems
+  tramoEditLayer = L.polyline(coords, {color:'#f59e0b', weight:3});
+  drawnItems.addLayer(tramoEditLayer);
+
+  // Activar edición sobre ese layer
+  const editHandler = new L.EditToolbar.Edit(map, {
+    featureGroup: drawnItems,
+    selectedPathOptions: { maintainColor: true }
+  });
+  editHandler.enable();
+
+  // Mostrar panel con botón guardar
+  document.getElementById('tramo-nombre').value = nombre || '';
+  document.getElementById('tramo-tipo').value   = tipo   || 'drop';
+  const pt = document.getElementById('panel-tramo');
+  pt.style.display = 'flex';
+
+  // Sobreescribir guardar para update
+  window._editandoTramo = {editHandler};
+  toast('Arrastrá los vértices y luego guardá');
+}
+
+const _guardarTramoOriginal = guardarTramo;
+async function guardarTramo() {
+  if(tramoEditandoId && window._editandoTramo) {
+    window._editandoTramo.editHandler.save();
+    window._editandoTramo.editHandler.disable();
+    const coords = tramoEditLayer.getLatLngs().map(ll=>[ll.lat,ll.lng]);
+    const nombre = document.getElementById('tramo-nombre').value || 'Tramo';
+    const tipo   = document.getElementById('tramo-tipo').value;
+    await fetch('/api/tramos',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({id:tramoEditandoId, coords, nombre, tipo})});
+    drawnItems.removeLayer(tramoEditLayer);
+    tramoEditLayer=null; tramoEditandoId=null; window._editandoTramo=null;
+    document.getElementById('panel-tramo').style.display='none';
+    await cargarRed();
+    toast('✅ Tramo actualizado');
+    return;
+  }
+  // Nuevo tramo
+  if(!tramoTempLayer) return;
+  const coords = tramoTempLayer.getLatLngs().map(ll=>[ll.lat,ll.lng]);
+  const nombre = document.getElementById('tramo-nombre').value || 'Tramo';
+  const tipo   = document.getElementById('tramo-tipo').value;
+  const resp = await fetch('/api/tramos',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({coords,nombre,tipo})});
+  if(resp.ok){ cancelarTramo(); await cargarRed(); toast('✅ Tramo guardado'); }
+}
+
+// Popup de tramo con botón Editar
+function buildTramoPopup(t) {
+  return `<div class="pnombre">${t.nombre||'Tramo'}</div>
+    <div class="prow"><span>Tipo</span><span>${t.tipo}</span></div>
+    <div class="popup-actions">
+      <button class="popup-btn popup-btn-detalle"
+        onclick="map.closePopup();editarTramo(${t.id},${JSON.stringify(t.coords)},'${(t.nombre||'').replace(/'/g,"\\'")}','${t.tipo}')">Editar</button>
+      <button class="popup-btn" style="background:#3f1f1f;color:#fca5a5" onclick="eliminarTramo(${t.id})">Eliminar</button>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════
+// PROSPECTOS
+// ═══════════════════════════════════════════
+function makeProspectoIcon(tieneCaja) {
+  const color = tieneCaja ? '#f43f5e' : '#94a3b8';
+  const inner = tieneCaja
+    ? `<line x1="9" y1="12" x2="15" y2="12" stroke="white" stroke-width="2" stroke-linecap="round"/>
+       <line x1="12" y1="9" x2="12" y2="15" stroke="white" stroke-width="2" stroke-linecap="round"/>`
+    : `<line x1="9" y1="12" x2="15" y2="12" stroke="white" stroke-width="2" stroke-linecap="round"/>`;
+  return L.divIcon({
+    html:`<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 26 26">
+      <circle cx="13" cy="13" r="11" fill="${color}" stroke="white" stroke-width="2" stroke-dasharray="4,2"/>
+      ${inner}
+    </svg>`,
+    className:'',iconSize:[26,26],iconAnchor:[13,13],popupAnchor:[0,-15]
+  });
+}
+
+function buildProspectoPopup(p) {
+  return `
+    <div class="pnombre">🔍 Prospecto</div>
+    ${p.telefono?`<div class="prow"><span>Tel.</span><span>${p.telefono}</span></div>`:''}
+    ${p.nota?`<div class="prow"><span>Nota</span><span>${p.nota}</span></div>`:''}
+    <div class="prow"><span>Caja cercana</span>
+      <span style="color:${p.tiene_caja?'#22c55e':'#ef4444'}">${p.tiene_caja?'✅ Sí':'❌ No'}</span></div>
+    <div style="margin-top:6px;font-size:11px;color:#64748b">${new Date(p.created_at+'Z').toLocaleDateString('es-AR')}</div>
+    <div style="margin-top:8px">
+      <select class="popup-estado-select" onchange="convertirProspecto(${p.id},this.value)">
+        <option value="">— Convertir a cliente —</option>
+        ${Object.values(estadosMap).map(e=>`<option value="${e.nombre}">${e.nombre}</option>`).join('')}
+      </select>
+    </div>
+    <div class="popup-actions" style="margin-top:6px">
+      <button class="popup-btn" style="background:#3f1f1f;color:#fca5a5" onclick="borrarProspecto(${p.id})">Eliminar</button>
+    </div>`;
+}
+
+async function convertirProspecto(id, estadoNombre) {
+  if(!estadoNombre) return;
+  if(!confirm(`¿Convertir a cliente con estado "${estadoNombre}"? El prospecto se eliminará.`)) return;
+  await fetch(`/api/prospectos/${id}/convertir`,{
+    method:'PATCH', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({estado_nombre:estadoNombre})
+  });
+  await Promise.all([cargarProspectos(), cargarClientes()]);
+  toast(`✅ Prospecto convertido a cliente: ${estadoNombre}`);
+}
+
+async function borrarProspecto(id) {
+  if(!confirm('¿Eliminar este prospecto?')) return;
+  await fetch(`/api/prospectos/${id}`,{method:'DELETE'});
+  await cargarProspectos();
+  toast('Prospecto eliminado');
+}
+
+async function cargarProspectos() {
+  const prospectos = await fetch('/api/prospectos').then(r=>r.json());
+  layerProspectos.clearLayers();
+  prospectos.forEach(p=>{
+    const marker = L.marker([p.lat,p.lng],{icon:makeProspectoIcon(p.tiene_caja)})
+      .bindPopup(buildProspectoPopup(p));
+    layerProspectos.addLayer(marker);
+  });
+  return prospectos.length;
+}
+
+// ═══════════════════════════════════════════
+// IMPORTACIÓN CSV
+// ═══════════════════════════════════════════
+async function importarCSV(tipo) {
+  const input=document.getElementById(`file-${tipo==='clientes'?'clientes':'red'}`);
+  const msg=document.getElementById(`msg-${tipo==='clientes'?'clientes':'red'}`);
+  if(!input.files[0]){msg.textContent='Seleccioná un archivo';return}
+  const fd=new FormData(); fd.append('file',input.files[0]);
+  msg.textContent='Importando...';
+  const url=tipo==='clientes'?'/api/clientes/importar':'/api/tramos/importar';
+  const r=await fetch(url,{method:'POST',body:fd});
+  const d=await r.json();
+  msg.textContent=`✅ ${d.ok} importados${d.errores?`, ${d.errores} errores`:''}`;
+  if(tipo==='clientes') cargarClientes(); else cargarRed();
+}
+
+async function syncClientes() {
+  const msg=document.getElementById('msg-sync');
+  msg.textContent='Sincronizando...';
+  await fetch('/api/clientes/sync',{method:'POST'});
+  msg.textContent='✅ Sync completado';
+  cargarClientes();
+}
+
+// ═══════════════════════════════════════════
+// LEYENDA
+// ═══════════════════════════════════════════
+const legend=L.control({position:'bottomright'});
+legend.onAdd=()=>{
+  const div=L.DomUtil.create('div','legend');
+  div.innerHTML=`
+    <div class="legend-title">NAPs</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#22c55e"></div>Amplia disponibilidad</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#eab308"></div>Pocas libres</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>Sin disponibilidad</div>
+    <div class="legend-sep"></div>
+    <div class="legend-title">Red</div>
+    <div class="legend-item"><div class="legend-line" style="background:#a855f7"></div>Troncal</div>
+    <div class="legend-item"><div class="legend-line" style="background:#38bdf8"></div>Oval</div>
+    <div class="legend-item"><div class="legend-line" style="background:#94a3b8"></div>Drop</div>
+    <div class="legend-sep"></div>
+    <div class="legend-title">Prospectos</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#f43f5e;border-style:dashed"></div>Con caja disponible</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#94a3b8;border-style:dashed"></div>Sin caja disponible</div>`;
+  return div;
+};
+legend.addTo(map);
+
+// ═══════════════════════════════════════════
+// INICIO
+// ═══════════════════════════════════════════
+(async()=>{
+  try {
+    const [napStats,,totalClientes,totalProspectos] = await Promise.all([
+      cargarNaps(), cargarRed(), cargarClientes(), cargarProspectos()
+    ]);
+    document.getElementById('loading').style.display='none';
+    document.getElementById('stats').innerHTML=`
+      <span class="stat"><span class="stat-dot" style="background:#22c55e"></span>${napStats.conDispo} NAPs libres</span>
+      <span class="stat"><span class="stat-dot" style="background:#3b82f6"></span>${totalClientes} clientes</span>
+      <span class="stat"><span class="stat-dot" style="background:#f43f5e"></span>${totalProspectos} prospectos</span>`;
+  } catch(e) {
+    document.getElementById('loading').innerHTML=
+      `<div style="color:#ef4444">❌ Error cargando datos</div><div style="font-size:12px;color:#64748b">${e.message}</div>`;
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,159 @@
+╔══════════════════════════════════════════════════════╗
+║           FIBOXITO — Manual de uso                   ║
+║           Asistente interno de Fibox                 ║
+╚══════════════════════════════════════════════════════╝
+
+Fiboxito es un bot de Telegram que permite consultar clientes,
+facturas, IPs disponibles y analizar comprobantes de pago, todo
+desde Telegram sin tener que abrir el navegador y entrar a Wispro/Hola.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ ACCESO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Solo usuarios autorizados pueden usar el bot.
+Si no tenés acceso, pedile a un admin que ejecute:
+
+  /agregar TU_CHAT_ID
+
+Tu chat_id lo obtenés escribiéndole al bot sin autorización:
+él mismo te lo muestra en el mensaje de acceso denegado.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ COMANDOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /manual          → Descarga este archivo
+  /help [tema]     → Ayuda detallada sobre un tema
+  /agregar [id]    → (solo admins) Autoriza un chat_id
+
+Temas disponibles para /help:
+  cliente · factura · pdf · ip · comprobante · agregar
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ CONSULTAS DE CLIENTES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Podés buscar un cliente por número de ID o por nombre.
+Si en la conversación siguiente nombrás otro dato del mismo
+cliente (sin repetir el ID), Fiboxito lo recuerda.
+
+Ejemplos:
+  "Dame el estado del cliente 1234"
+  "Buscame a González"
+  "¿Cuál es el saldo de Martínez?"
+  "Email y teléfono del 850"
+
+Datos que podés consultar:
+  · Nombre, email, teléfono, dirección
+  · Saldo y cuenta corriente
+  · Estado del contrato y plan activo
+  · Últimas 3 facturas (número, período, monto, vencimiento, estado)
+
+La información se consulta en Wispro por lo que es necesario que se
+encuentre registrada ahí o el bot contestará con "info vacía".
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ FACTURAS Y PDF
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Para ver las últimas facturas de un cliente:
+  "Facturas del 1234"
+  "¿Pagó Rodríguez?"
+
+Para descargar el PDF de la última factura:
+  "Última factura de 1234"
+  "Dame el PDF del cliente González"
+  "Descargar factura del 850"
+
+El bot descarga el PDF directamente desde Wispro y te lo
+envía como archivo adjunto en el chat.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ ÚLTIMOS CLIENTES REGISTRADOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Para ver los últimos clientes dados de alta en Wispro:
+  "Últimos clientes"
+  "Último cliente registrado"
+  "Nuevo cliente"
+
+Muestra: ID · Nombre · Fecha de alta
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ IPs DISPONIBLES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Consulta IPs libres en cada zona de red:
+
+  "IPs libres moldes"      → zona Moldes   (172.19.102.X)
+  "IPs disponibles pinares"→ zona Pinares  (172.18.100.X)
+  "IPs libres sta fe"      → zona Santa Fe (172.19.102.X)
+
+Si no indicás zona, por defecto muestra Moldes.
+Devuelve hasta 10 IPs disponibles del Mikrotik correspondiente.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ ANÁLISIS DE COMPROBANTES (foto directa)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Mandá una foto de un comprobante de transferencia al chat
+y Fiboxito lo analiza automáticamente:
+
+  · ¿Es un comprobante válido?
+  · ¿El destinatario es Fibox (nombre o CBU/CVU)?
+  · Monto detectado
+  · Fecha detectada
+  · Resultado: OK / NO OK + motivo
+
+No hace falta escribir nada: simplemente enviá la imagen.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ ANÁLISIS AUTOMÁTICO DESDE HOLA SUITE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Cuando un cliente comparte un comprobante vía Hola Suite,
+Fiboxito actúa sin intervención humana:
+
+  1. Detecta el ticket pendiente en Wispro (categoría configurada)
+  2. Descarga y analiza la imagen del comprobante
+  3. Verifica destinatario, monto y fecha
+  4. Detecta comprobantes duplicados (por N° de operación)
+  5. Cierra el ticket con el resultado + enlace al comprobante
+  6. Envía un informe por Telegram con:
+       · Resultado (OK / NO OK)
+       · Nombre del pagador y monto
+       · N° de operación
+       · Link para descargar el comprobante
+
+El ciclo de revisión corre cada 1 minutos.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ ADMINISTRACIÓN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Agregar un usuario autorizado (solo desde un chat ya autorizado):
+  /agregar 1024169379
+
+El bot confirma si el ID fue agregado o si ya existía.
+Los IDs autorizados se guardan en whitelist.json.
+
+Para agregar un grupo: el chat_id de un grupo es un número
+negativo (ej. -1001234567890). Agregalo igual:
+  /agregar -1001234567890
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ LÍMITES Y CONSIDERACIONES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  · El bot recuerda hasta los últimos 5 turnos de conversación
+    por usuario (configurable con MEMORIA_TURNOS).
+  · Las facturas que muestra son las últimas 3, sin contar
+    las anuladas (state: void).
+  · Un comprobante se considera válido si la fecha está dentro
+    de los últimos 20 días (configurable con
+    DIAS_VALIDEZ_COMPROBANTE).
+  · El análisis de comprobantes usa Claude Haiku vía API
+    de Anthropic.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
