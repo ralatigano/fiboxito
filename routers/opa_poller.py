@@ -180,7 +180,8 @@ async def _ciclo():
             motivo    = "Sin resultado"
             numero_op = None
             try:
-                analisis  = _analizar_url(url_img)
+                loop = asyncio.get_event_loop()
+                analisis  = await loop.run_in_executor(None, _analizar_url, url_img)
                 numero_op = analisis.get("numero_operacion")
 
                 if numero_op and _operacion_ya_usada(numero_op):
