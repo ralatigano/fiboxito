@@ -14,6 +14,8 @@ CLAUDE_API_KEY           = os.getenv("CLAUDE_API_KEY", "")
 DESTINATARIO_NOMBRE      = os.getenv("DESTINATARIO_NOMBRE", "")
 DESTINATARIO_CBU         = os.getenv("DESTINATARIO_CBU", "")
 DIAS_VALIDEZ_COMPROBANTE = int(os.getenv("DIAS_VALIDEZ_COMPROBANTE", "30"))
+# Pasarelas de pago que actúan como intermediarias (ej: Rapipago usa "Banco Roela SIRO")
+DESTINATARIO_ALIAS       = [a.strip() for a in os.getenv("DESTINATARIO_ALIAS", "").split(",") if a.strip()]
 
 PROMPT_EXTRACCION = (
     "Analizá esta imagen, que debería ser un comprobante de pago o transferencia bancaria. "
@@ -80,7 +82,8 @@ def _validar(datos: dict, monto_esperado: float | None) -> dict:
     cbu_recibido    = _solo_digitos(datos.get("destinatario_cbu"))
     dest_ok = bool(
         (DESTINATARIO_NOMBRE and _normalizar(DESTINATARIO_NOMBRE) in nombre_recibido) or
-        (DESTINATARIO_CBU and _solo_digitos(DESTINATARIO_CBU) == cbu_recibido and cbu_recibido)
+        (DESTINATARIO_CBU and _solo_digitos(DESTINATARIO_CBU) == cbu_recibido and cbu_recibido) or
+        any(_normalizar(alias) in nombre_recibido for alias in DESTINATARIO_ALIAS)
     )
 
     # Monto

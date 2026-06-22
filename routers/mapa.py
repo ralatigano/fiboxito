@@ -19,7 +19,7 @@ _naps_lock = asyncio.Lock()
 
 
 async def refrescar_naps_si_necesario():
-    from agent_backend import wispro_get
+    from clients.wispro import wispro_get
     from db import get_naps_cache, set_naps_cache
 
     cache = get_naps_cache()
@@ -244,7 +244,7 @@ async def eliminar_cliente(cliente_id: int):
 @router.get("/api/clientes/{cliente_id}/detalle")
 async def detalle_cliente_wispro(cliente_id: int):
     """Trae datos en tiempo real de Wispro para un cliente."""
-    from agent_backend import wispro_get
+    from clients.wispro import wispro_get
     from db import get_conn
     with get_conn() as conn:
         row = conn.execute(
