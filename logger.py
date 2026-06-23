@@ -26,9 +26,11 @@ def get_logger() -> logging.Logger:
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(logging.Formatter("%(message)s"))
 
+    from config import DEBUG
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.ERROR)
-    console_handler.setFormatter(logging.Formatter("[ERROR] %(message)s"))
+    console_handler.setLevel(logging.DEBUG if DEBUG else logging.ERROR)
+    fmt = "%(message)s" if DEBUG else "[ERROR] %(message)s"
+    console_handler.setFormatter(logging.Formatter(fmt))
 
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)

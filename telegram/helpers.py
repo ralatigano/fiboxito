@@ -1,6 +1,6 @@
 import requests
 
-from config import TELEGRAM_TOKEN, TELEGRAM_API
+from config import TELEGRAM_TOKEN, TELEGRAM_API  # noqa: F401 (TELEGRAM_TOKEN used in descargar_foto_telegram)
 from logger import log_debug
 
 
@@ -15,6 +15,19 @@ def send_document(chat_id: int, doc_bytes: bytes, filename: str, mime_type: str 
         f"{TELEGRAM_API}/sendDocument",
         data={"chat_id": chat_id},
         files={"document": (filename, doc_bytes, mime_type)}
+    )
+
+
+def send_photo(chat_id: int, photo_bytes: bytes, caption: str = ""):
+    log_debug(f"[TELEGRAM OUT] foto → chat_id={chat_id}")
+    data = {"chat_id": chat_id}
+    if caption:
+        data["caption"] = caption
+    requests.post(
+        f"{TELEGRAM_API}/sendPhoto",
+        data=data,
+        files={"photo": ("screenshot.png", photo_bytes, "image/png")},
+        timeout=30,
     )
 
 

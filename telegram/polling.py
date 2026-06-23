@@ -5,8 +5,10 @@ from datetime import datetime
 from config import TELEGRAM_API, MANUAL_FILE
 from logger import log_debug, log_error, log_conversacion
 from telegram.whitelist import es_autorizado, agregar_a_whitelist
-from telegram.helpers import send_message, send_document, analizar_foto_telegram
+from telegram.helpers import send_message, send_document, send_photo, analizar_foto_telegram
 from agent.handler import procesar_mensaje
+from routers.obs import service as obs_service
+from routers.obs.config import OBS_SSH_HOST
 
 AYUDA_TEMAS: dict[str, str] = {
     "cliente": (
@@ -124,7 +126,7 @@ async def polling_loop():
                 lambda o=offset: requests.get(
                     f"{TELEGRAM_API}/getUpdates",
                     params={"timeout": 5, "offset": o},
-                    timeout=10
+                    timeout=(5, 20),  # (connect, read) — 5s de long-poll + margen
                 ).json()
             )
 
@@ -240,18 +242,47 @@ async def polling_loop():
                         log_debug(f"[CMD] /help → chat_id={chat_id} tema='{text}'")
                         continue
 
+                    # --- COMANDO /obs ---
+                    if text.startswith("/obs"):
+                        partes_obs = text.strip().split(maxsplit=2)
+                        sub_obs    = partes_obs[1].lower() if len(partes_obs) > 1 else ""
+                        if sub_obs in ("foto", "screenshot", "captura"):
+                            try:
+                                img = await loop.run_in_executor(
+                                    None, lambda: obs_service.get_screenshot()
+                                )
+                                await loop.run_in_executor(
+                                    None, lambda: send_photo(chat_id, img, "📷 Canal en vivo")
+                                )
+                            except Exception as e:
+                                await loop.run_in_executor(
+                                    None, lambda: send_message(chat_id, f"❌ Error al capturar: {e}")
+                                )
+                        else:
+                            respuesta_obs = await loop.run_in_executor(
+                                None, lambda t=text: _manejar_obs(t)
+                            )
+                            await loop.run_in_executor(None, lambda r=respuesta_obs: send_message(chat_id, r))
+                        log_debug(f"[CMD] /obs → chat_id={chat_id}")
+                        continue
+
                     # --- MENSAJE NORMAL ---
-                    texto, pdf = await loop.run_in_executor(
+                    texto, adjunto = await loop.run_in_executor(
                         None, lambda t=text, n=nombre_usuario: procesar_mensaje(chat_id, t, n)
                     )
                     await loop.run_in_executor(None, lambda: send_message(chat_id, texto))
 
-                    if pdf:
-                        periodo  = datetime.now().strftime("%Y-%m")
-                        filename = f"factura_{periodo}.pdf"
-                        await loop.run_in_executor(
-                            None, lambda: send_document(chat_id, pdf, filename)
-                        )
+                    if adjunto:
+                        if texto.startswith("📷"):
+                            await loop.run_in_executor(
+                                None, lambda: send_photo(chat_id, adjunto)
+                            )
+                        else:
+                            periodo  = datetime.now().strftime("%Y-%m")
+                            filename = f"factura_{periodo}.pdf"
+                            await loop.run_in_executor(
+                                None, lambda: send_document(chat_id, adjunto, filename)
+                            )
 
                     log_conversacion(chat_id, nombre_usuario, text, texto)
 
@@ -260,3 +291,96 @@ async def polling_loop():
             log_error(f"[ERROR en polling] {e}\n{traceback.format_exc()}")
 
         await asyncio.sleep(1)
+
+
+# ── Manejador del comando /obs ──────────────────────────────────────────────
+
+def _manejar_obs(text: str) -> str:
+    if not OBS_SSH_HOST:
+        return "OBS no configurado. Falta OBS_SSH_HOST en el .env."
+
+    partes     = text.strip().split(maxsplit=2)
+    subcomando = partes[1].lower() if len(partes) > 1 else "status"
+
+    try:
+        if subcomando == "status":
+            st      = obs_service.get_status()
+            stream  = "🟢 ACTIVO" if st["stream_active"] else "🔴 INACTIVO"
+            tc      = st.get("stream_timecode") or "--"
+            scene   = st["current_scene"]
+            wd      = st["watchdog_status"]
+            fuente  = st.get("current_source") or "?"
+            return (
+                f"📡 Stream: {stream}\n"
+                f"⏱ Tiempo: {tc}\n"
+                f"🎬 Escena: {scene}\n"
+                f"🤖 Watchdog: {wd}\n"
+                f"🎵 Fuente activa: {fuente}"
+            )
+
+        if subcomando in ("start", "iniciar"):
+            obs_service.start_stream()
+            return "✅ Stream iniciado."
+
+        if subcomando in ("stop", "detener"):
+            obs_service.stop_stream()
+            return "⛔ Stream detenido."
+
+        if subcomando == "restart":
+            obs_service.restart_obs()
+            return "🔄 OBS reiniciado."
+
+        if subcomando in ("camara", "camera", "cam"):
+            obs_service.restart_camera()
+            return "📷 Cámara reiniciada."
+
+        if subcomando == "watchdog":
+            accion = partes[2].lower() if len(partes) > 2 else "status"
+            if accion == "restart":
+                obs_service.restart_watchdog()
+                return "🔄 Watchdog reiniciado."
+            wd = obs_service.get_watchdog_status()
+            fuente = wd.get("state", {}).get("current_source", "?")
+            return f"🤖 Watchdog: {wd['status']}\n🎵 Fuente activa: {fuente}"
+
+        if subcomando == "fuentes":
+            fuentes = obs_service.get_sources()
+            lineas  = ["📡 Fuentes en escena:"]
+            for f in fuentes:
+                icono = "✅" if f["enabled"] else "⬜"
+                lineas.append(f"  {icono} {f['name']}")
+            return "\n".join(lineas)
+
+        if subcomando == "activar":
+            nombre = partes[2] if len(partes) > 2 else ""
+            if not nombre:
+                return "Uso: /obs activar <NombreFuente>\nEj: /obs activar RadioSanNicolas"
+            obs_service.set_source_enabled(nombre, True)
+            return f"✅ Fuente '{nombre}' activada."
+
+        if subcomando == "desactivar":
+            nombre = partes[2] if len(partes) > 2 else ""
+            if not nombre:
+                return "Uso: /obs desactivar <NombreFuente>\nEj: /obs desactivar RadioPop"
+            obs_service.set_source_enabled(nombre, False)
+            return f"⬜ Fuente '{nombre}' desactivada."
+
+        if subcomando == "logs":
+            servicio = partes[2].lower() if len(partes) > 2 else "watchdog"
+            logs     = obs_service.get_logs(servicio, lines=40)
+            return f"📋 Logs [{servicio}]:\n\n{logs[-3500:]}"
+
+        return (
+            "Comandos /obs disponibles:\n"
+            "  /obs status\n"
+            "  /obs start | stop | restart\n"
+            "  /obs fuentes\n"
+            "  /obs activar <Nombre>\n"
+            "  /obs desactivar <Nombre>\n"
+            "  /obs camara\n"
+            "  /obs watchdog [restart]\n"
+            "  /obs logs [obs|watchdog|camara]"
+        )
+
+    except Exception as e:
+        return f"❌ Error OBS: {e}"

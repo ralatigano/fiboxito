@@ -4,8 +4,8 @@
 ╚══════════════════════════════════════════════════════╝
 
 Fiboxito es un bot de Telegram que permite consultar clientes,
-facturas, IPs disponibles y analizar comprobantes de pago, todo
-desde Telegram sin tener que abrir el navegador y entrar a Wispro/Hola.
+facturas, IPs disponibles, analizar comprobantes de pago y
+controlar el canal de streaming OBS, todo desde Telegram.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  ACCESO
@@ -26,6 +26,7 @@ Tu chat_id lo obtenés escribiéndole al bot sin autorización:
   /manual          → Descarga este archivo
   /help [tema]     → Ayuda detallada sobre un tema
   /agregar [id]    → (solo admins) Autoriza un chat_id
+  /obs [subcomando]→ Control directo del canal OBS
 
 Temas disponibles para /help:
   cliente · factura · pdf · ip · comprobante · agregar
@@ -108,6 +109,10 @@ y Fiboxito lo analiza automáticamente:
 
 No hace falta escribir nada: simplemente enviá la imagen.
 
+Intermediarios aceptados como destinatario válido:
+  · Clamat Producciones SRL
+  · Banco Roela / Banco Roela SIRO (pasarela Rapipago)
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  ANÁLISIS AUTOMÁTICO DESDE HOLA SUITE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -126,7 +131,137 @@ Fiboxito actúa sin intervención humana:
        · N° de operación
        · Link para descargar el comprobante
 
-El ciclo de revisión corre cada 1 minutos.
+El ciclo de revisión corre cada 1 minuto.
+Este proceso está deshabilitado en modo DEBUG (entorno de desarrollo).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ CONTROL DEL CANAL OBS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Fiboxito puede controlar el canal de streaming directamente
+desde Telegram, tanto con comandos explícitos como con
+lenguaje natural.
+
+── Estado ─────────────────────────────────────────────
+
+  /obs status
+  "¿Cómo está el canal?"
+  "¿Está transmitiendo?"
+  "Estado del stream"
+
+Muestra: estado del stream · tiempo al aire · escena activa ·
+estado del watchdog · fuente de audio activa.
+
+── Iniciar / Detener stream ────────────────────────────
+
+  /obs start              → iniciar transmisión
+  /obs stop               → detener transmisión
+  "Arrancá el stream"
+  "Iniciá la transmisión"
+  "Pará el canal"
+  "Cortá el stream"
+
+── Reiniciar stream ────────────────────────────────────
+
+  "Reiniciá la transmisión"
+  "Reiniciá el stream"
+
+Detiene y reinicia el stream (StopStream + StartStream).
+No toca OBS ni la cámara, solo reconecta el encoder.
+
+── Reiniciar OBS ───────────────────────────────────────
+
+  /obs restart
+  "Reiniciá OBS"
+  "Reiniciá el programa"
+
+Mata el proceso OBS. El watchdog lo detecta y lo reinicia
+automáticamente con la configuración correcta.
+Usá este comando solo si el reinicio del stream no resolvió
+el problema.
+
+── Fuentes de audio ────────────────────────────────────
+
+  /obs fuentes
+  "¿Qué fuentes hay?"
+  "¿Qué está sonando?"
+
+Muestra todas las fuentes de la escena con su estado (activa/inactiva).
+Solo se reportan las fuentes programables (las del schedule + musica).
+
+  /obs activar RadioSanNicolas
+  /obs desactivar RadioFMEspacio
+  "Cambiá a FM Espacio"
+  "Poné Radio San Nicolás"
+  "Cambiá a Radio Pop"
+
+Fuentes disponibles:
+  · musica          → música de fondo (fuente por defecto)
+  · RadioFMEspacio  → FM Espacio
+  · RadioSanNicolas → Radio San Nicolás
+  · RadioPop        → Radio Pop / Trasnoche Paranormal
+
+── Silenciar / Activar audio ───────────────────────────
+
+  "Silenciá el canal"
+  "Muteá el audio"
+  "Quitá el silencio"
+  "Desmuteá"
+
+Mutea o desmutea la fuente de audio activa en ese momento.
+
+── Reiniciar cámara ────────────────────────────────────
+
+  /obs camara
+  "Reiniciá la cámara"
+  "Reiniciá el video"
+
+Reinicia el proceso mpv que captura la señal RTSP de la cámara.
+Equivale a lo que hace la cron automática cada 30 minutos.
+
+── Screenshot del canal ────────────────────────────────
+
+  /obs foto
+  "Mandame una foto del canal"
+  "Captura de pantalla"
+
+Captura el display de la PC OBS y lo envía como imagen.
+Útil para verificar qué se está viendo en pantalla sin
+necesidad de conectar un monitor físico.
+
+── Logs ────────────────────────────────────────────────
+
+  /obs logs watchdog     → últimas 40 líneas del watchdog
+  /obs logs obs          → últimas 40 líneas del log de OBS
+  /obs logs camara       → últimas 40 líneas del servicio de cámara
+
+── Watchdog ────────────────────────────────────────────
+
+  /obs watchdog              → estado del watchdog
+  /obs watchdog restart      → reiniciar el watchdog
+  "Estado del watchdog"
+
+El watchdog monitorea OBS continuamente y actúa si detecta
+que OBS se cayó o hay problemas de video.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ NOTIFICACIONES AUTOMÁTICAS OBS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+En producción, Fiboxito monitorea el estado del canal cada
+30 segundos y envía alertas automáticas al admin cuando:
+
+  🔴 Stream caído     → la transmisión se interrumpió
+  🟢 Stream recuperado→ el canal volvió al aire
+  🔄 Cambio de fuente → el schedule cambió la fuente activa
+  📷 Error de cámara  → mpv lleva más de 2 minutos sin correr
+
+El aviso de cámara tiene un delay de 2 minutos para no
+generar ruido con los reinicios programados (la cron reinicia
+mpv cada 30 minutos como parte del funcionamiento normal).
+
+El poller OBS está deshabilitado en modo DEBUG salvo que se
+configure OBS_POLLER_ENABLED=true en el .env.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  ADMINISTRACIÓN
@@ -155,5 +290,11 @@ negativo (ej. -1001234567890). Agregalo igual:
     DIAS_VALIDEZ_COMPROBANTE).
   · El análisis de comprobantes usa Claude Haiku vía API
     de Anthropic.
+  · Los comandos OBS requieren que la variable OBS_SSH_HOST
+    esté configurada en el .env. Si no está, el bot lo indica.
+  · El intervalo del poller OBS es configurable con
+    OBS_POLL_INTERVAL (default: 30 segundos).
+  · El delay de alerta de cámara es configurable con
+    OBS_CAMERA_ALERT_DELAY (default: 120 segundos).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

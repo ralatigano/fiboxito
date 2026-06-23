@@ -19,7 +19,8 @@ LOGS_DIR       = os.getenv("LOGS_DIR", "logs")
 WHITELIST_FILE = os.getenv("WHITELIST_FILE", "whitelist.json")
 MEMORIA_TURNOS = int(os.getenv("MEMORIA_TURNOS", "5"))
 MANUAL_FILE    = os.getenv("MANUAL_FILE", "manual_fiboxito.txt")
-DEBUG          = os.getenv("DEBUG", "false").lower() in ("true", "1", "yes")
+DEBUG              = os.getenv("DEBUG", "false").lower() in ("true", "1", "yes")
+OBS_POLLER_ENABLED = os.getenv("OBS_POLLER_ENABLED", "false").lower() in ("true", "1", "yes")
 
 if not TELEGRAM_TOKEN:
     raise ValueError("Falta TELEGRAM_TOKEN en el archivo .env")

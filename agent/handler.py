@@ -6,7 +6,7 @@ from clients.wispro import (
     obtener_ultimos_clientes, obtener_ips_libres,
 )
 from clients.ollama import ask_ollama
-from agent.intent import detectar_intencion, extraer_termino_busqueda
+from agent.intent import detectar_intencion, clasificar_intent_obs, extraer_termino_busqueda
 from agent.prompts import (
     prompt_saludo, prompt_cliente_no_encontrado,
     prompt_cliente_sin_termino, prompt_general,
@@ -107,6 +107,11 @@ def procesar_mensaje(chat_id: int, user_message: str, nombre_usuario: str) -> tu
         actualizar_historial(chat_id, "assistant", respuesta)
         return respuesta, None
 
+    if intencion == "obs":
+        respuesta, imagen = _procesar_obs(user_message)
+        actualizar_historial(chat_id, "assistant", respuesta)
+        return respuesta, imagen
+
     if intencion == "consulta_cliente":
 
         if any(p in msg for p in ["último cliente", "ultimo cliente", "últimos clientes", "ultimos clientes", "último id", "nuevo cliente"]):
@@ -168,3 +173,105 @@ def procesar_mensaje(chat_id: int, user_message: str, nombre_usuario: str) -> tu
     respuesta = ask_ollama(prompt_general(user_message, nombre_usuario, ctx))
     actualizar_historial(chat_id, "assistant", respuesta)
     return respuesta, None
+
+
+# ── OBS ────────────────────────────────────────────────────────
+
+def _procesar_obs(user_message: str) -> tuple[str, bytes | None]:
+    from routers.obs import service as obs
+    from routers.obs.config import OBS_SSH_HOST
+
+    if not OBS_SSH_HOST:
+        return "OBS no configurado. Falta OBS_SSH_HOST en el .env.", None
+
+    intent = clasificar_intent_obs(user_message)
+    accion = intent["accion"]
+    param  = intent.get("param")
+    log_debug(f"[OBS INTENT] accion={accion} param={param}")
+
+    try:
+        if accion == "status":
+            st     = obs.get_status()
+            stream = "🟢 ACTIVO" if st["stream_active"] else "🔴 INACTIVO"
+            tc     = st.get("stream_timecode") or "--"
+            scene  = st["current_scene"]
+            wd     = st["watchdog_status"]
+            fuente = st.get("current_source") or "?"
+            return (
+                f"📡 Stream: {stream}\n"
+                f"⏱ Tiempo: {tc}\n"
+                f"🎬 Escena: {scene}\n"
+                f"🤖 Watchdog: {wd}\n"
+                f"🎵 Fuente activa: {fuente}"
+            ), None
+
+        if accion == "start":
+            obs.start_stream()
+            return "✅ Stream iniciado.", None
+
+        if accion == "stop":
+            obs.stop_stream()
+            return "⛔ Stream detenido.", None
+
+        if accion == "restart_stream":
+            obs.restart_stream()
+            return "🔄 Stream reiniciado.", None
+
+        if accion == "restart":
+            obs.restart_obs()
+            return "🔄 OBS reiniciado. Puede tardar unos segundos en volver al aire.", None
+
+        if accion == "restart_camera":
+            obs.restart_camera()
+            return "📷 Reiniciando mpv con la señal de la cámara...", None
+
+        if accion == "restart_watchdog":
+            obs.restart_watchdog()
+            return "🔄 Watchdog reiniciado.", None
+
+        if accion == "watchdog_status":
+            wd = obs.get_watchdog_status()
+            return f"🤖 Watchdog: {wd['status']}", None
+
+        if accion == "mute":
+            fuente = obs.set_mute(True)
+            return f"🔇 Fuente '{fuente}' silenciada.", None
+
+        if accion == "unmute":
+            fuente = obs.set_mute(False)
+            return f"🔊 Fuente '{fuente}' con audio activado.", None
+
+        if accion == "fuentes":
+            fuentes = obs.get_sources()
+            lineas  = ["📡 Fuentes en escena:"]
+            for f in fuentes:
+                icono = "✅" if f["enabled"] else "⬜"
+                lineas.append(f"  {icono} {f['name']}")
+            return "\n".join(lineas), None
+
+        if accion == "activar_fuente":
+            if not param:
+                return "No pude identificar la fuente. ¿Podés ser más específico?", None
+            obs.set_source_enabled(param, True)
+            return f"✅ Cambiado a '{param}'.", None
+
+        if accion == "desactivar_fuente":
+            if not param:
+                return "No pude identificar la fuente. ¿Podés ser más específico?", None
+            obs.set_source_enabled(param, False)
+            return f"⬜ Fuente '{param}' desactivada.", None
+
+        if accion == "logs":
+            servicio = param or "watchdog"
+            logs     = obs.get_logs(servicio, lines=30)
+            return f"📋 Logs [{servicio}]:\n\n{logs[-3000:]}", None
+
+        if accion == "screenshot":
+            img = obs.get_screenshot()
+            return "📷 Canal en vivo:", img
+
+        return "No entendí qué querés hacer con OBS. Podés preguntarme por el estado, iniciar/detener el stream, cambiar la fuente de audio, etc.", None
+
+    except Exception as e:
+        log_debug(f"[OBS ERROR] {e}")
+        return f"❌ Error al comunicarse con OBS: {e}", None
