@@ -216,8 +216,19 @@ async def _ciclo():
                 notif += f"\n🔑 N° op: {numero_op}"
             notif += f'\n🔗 <a href="{url_img}">Descargá el comprobante aquí</a>'
 
-            await _finalizar_issue(
-                client, issue_id,
-                f"[Fiboxito] {resultado}: {motivo}\nComprobante: {url_img}"
-            )
+            desc_ticket = f"[Fiboxito] {resultado}: {motivo}"
+            if emisor:
+                desc_ticket += f"\nPagó: {emisor}"
+            if monto:
+                desc_ticket += f"\nMonto: {monto}"
+            fecha_det = analisis.get("fecha_detectada")
+            if fecha_det:
+                desc_ticket += f"\nFecha: {fecha_det}"
+            if numero_op:
+                desc_ticket += f"\nN° operación: {numero_op}"
+            if contacto_wa:
+                desc_ticket += f"\nContacto: {contacto_wa}"
+            desc_ticket += f"\nComprobante: {url_img}"
+
+            await _finalizar_issue(client, issue_id, desc_ticket)
             await _notificar_telegram(notif)
