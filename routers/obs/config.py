@@ -20,3 +20,7 @@ OBS_WS_SCRIPT     = "/opt/obs-watchdog/modules/obs_ws.py"
 OBS_STATE_FILE    = "/opt/obs-watchdog/state.json"
 OBS_LOG_FILE      = "/opt/obs-watchdog/logs/watchdog.log"
 OBS_PROGRAMS_FILE = "/opt/obs-watchdog/data/programs.json"
+
+# Comando que reinicia la PC remota. Configurable por si el host necesita sudo
+# con contraseña o un binario distinto. Default: sudo sin contraseña.
+OBS_REBOOT_CMD    = os.getenv("OBS_REBOOT_CMD", "sudo reboot")

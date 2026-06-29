@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel OBS — Fibox</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#1a1a2e;color:#eee;min-height:100vh}
+
+    #header{height:52px;padding:0 16px;background:#16213e;display:flex;align-items:center;gap:12px;
+      border-bottom:1px solid #0f3460;position:sticky;top:0;z-index:100}
+    #header h1{font-size:15px;font-weight:600;color:#e2e8f0}
+    #header .sub{font-size:11px;color:#64748b}
+    #conn{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12px;color:#94a3b8}
+    #conn-dot{width:9px;height:9px;border-radius:50%;background:#64748b;transition:background .3s}
+    #conn-dot.ok{background:#22c55e}
+    #conn-dot.err{background:#ef4444}
+    #btn-refresh{background:#0f1f3d;border:1px solid #1e3a5f;border-radius:6px;color:#94a3b8;
+      font-size:12px;padding:5px 10px;cursor:pointer}
+    #btn-refresh:hover{color:#e2e8f0;border-color:#3b82f6}
+
+    #wrap{max-width:1100px;margin:0 auto;padding:16px;display:grid;
+      grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;align-items:start}
+
+    .card{background:#16213e;border:1px solid #1e3a5f;border-radius:10px;padding:14px 16px}
+    .card h2{font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;
+      letter-spacing:.7px;margin-bottom:12px;display:flex;align-items:center;gap:7px}
+    .card.wide{grid-column:1/-1}
+
+    /* estado */
+    .st-row{display:flex;justify-content:space-between;align-items:center;
+      padding:7px 0;border-bottom:1px solid #1e3a5f;font-size:13px}
+    .st-row:last-child{border-bottom:none}
+    .st-label{color:#94a3b8}
+    .st-val{color:#e2e8f0;font-weight:600}
+    .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;
+      padding:3px 10px;border-radius:999px}
+    .pill-dot{width:8px;height:8px;border-radius:50%}
+    .pill.on{background:rgba(34,197,94,.15);color:#4ade80}
+    .pill.on .pill-dot{background:#4ade80}
+    .pill.off{background:rgba(239,68,68,.15);color:#f87171}
+    .pill.off .pill-dot{background:#f87171}
+    .pill.warn{background:rgba(245,158,11,.15);color:#fbbf24}
+    .pill.warn .pill-dot{background:#fbbf24}
+
+    /* botones */
+    .btn-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .btn{border:none;border-radius:7px;font-size:13px;font-weight:600;padding:10px;cursor:pointer;
+      transition:filter .15s,opacity .15s;display:flex;align-items:center;justify-content:center;gap:7px}
+    .btn:hover{filter:brightness(1.12)}
+    .btn:active{filter:brightness(.95)}
+    .btn:disabled{opacity:.5;cursor:not-allowed;filter:none}
+    .btn-green{background:#16a34a;color:#fff}
+    .btn-red{background:#dc2626;color:#fff}
+    .btn-amber{background:#d97706;color:#fff}
+    .btn-blue{background:#2563eb;color:#fff}
+    .btn-slate{background:#334155;color:#e2e8f0}
+    .btn-ghost{background:#0f1f3d;border:1px solid #1e3a5f;color:#cbd5e1}
+    .btn-full{grid-column:1/-1}
+    .hint{font-size:11px;color:#64748b;margin-top:9px;line-height:1.5}
+
+    /* fuentes */
+    .src-row{display:flex;align-items:center;justify-content:space-between;gap:10px;
+      padding:9px 0;border-bottom:1px solid #1e3a5f}
+    .src-row:last-child{border-bottom:none}
+    .src-name{font-size:13px;color:#e2e8f0;display:flex;align-items:center;gap:8px}
+    .src-name .eye{font-size:15px;width:18px;text-align:center}
+    /* toggle */
+    .toggle{position:relative;width:42px;height:23px;flex-shrink:0;cursor:pointer}
+    .toggle input{opacity:0;width:0;height:0}
+    .slider{position:absolute;inset:0;background:#334155;border-radius:999px;transition:.2s}
+    .slider:before{content:"";position:absolute;height:17px;width:17px;left:3px;top:3px;
+      background:#94a3b8;border-radius:50%;transition:.2s}
+    .toggle input:checked + .slider{background:rgba(34,197,94,.4)}
+    .toggle input:checked + .slider:before{transform:translateX(19px);background:#4ade80}
+    .toggle.busy{opacity:.5;pointer-events:none}
+
+    /* captura */
+    #shot-wrap{position:relative;border-radius:8px;overflow:hidden;background:#0b1120;
+      min-height:160px;display:flex;align-items:center;justify-content:center}
+    #shot-img{width:100%;display:block}
+    #shot-empty{color:#475569;font-size:13px;padding:30px}
+
+    /* logs */
+    .log-bar{display:flex;gap:8px;margin-bottom:10px}
+    select{background:#0f1f3d;border:1px solid #1e3a5f;border-radius:6px;color:#e2e8f0;
+      font-size:13px;padding:7px 9px;outline:none;flex:1}
+    select:focus{border-color:#3b82f6}
+    pre#log-out{background:#0b1120;border:1px solid #1e3a5f;border-radius:7px;padding:11px;
+      font-size:11px;line-height:1.5;color:#cbd5e1;max-height:300px;overflow:auto;
+      white-space:pre-wrap;word-break:break-word;font-family:'Cascadia Code','Consolas',monospace}
+
+    .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;
+      border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
+    .spinner.dark{border-color:#1e3a5f;border-top-color:#3b82f6}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* toast */
+    #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:#1e293b;
+      border:1px solid #334155;border-radius:9px;padding:11px 18px;font-size:13px;color:#e2e8f0;
+      z-index:9999;opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;
+      box-shadow:0 6px 24px rgba(0,0,0,.5);max-width:90vw}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+    #toast.ok{border-color:#16a34a}
+    #toast.err{border-color:#dc2626}
+
+    /* modal confirm */
+    #modal{position:fixed;inset:0;background:rgba(2,6,23,.7);z-index:10000;
+      display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(2px)}
+    #modal.show{display:flex}
+    .modal-box{background:#16213e;border:1px solid #334155;border-radius:12px;padding:20px;
+      max-width:380px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.6)}
+    .modal-box h3{font-size:15px;color:#f1f5f9;margin-bottom:8px}
+    .modal-box p{font-size:13px;color:#94a3b8;line-height:1.6;margin-bottom:16px}
+    .modal-actions{display:flex;gap:9px;justify-content:flex-end}
+    .modal-actions .btn{padding:8px 16px}
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>🎬 Panel OBS</h1>
+    <span class="sub">Fibox · canal en vivo</span>
+    <div id="conn"><span id="conn-dot"></span><span id="conn-txt">conectando…</span></div>
+    <button id="btn-refresh" onclick="refreshAll()">↻ Actualizar</button>
+  </div>
+
+  <div id="wrap">
+
+    <!-- ESTADO -->
+    <div class="card">
+      <h2>📡 Estado</h2>
+      <div class="st-row"><span class="st-label">Transmisión</span><span id="st-stream" class="st-val">—</span></div>
+      <div class="st-row"><span class="st-label">Tiempo al aire</span><span id="st-time" class="st-val">—</span></div>
+      <div class="st-row"><span class="st-label">Escena</span><span id="st-scene" class="st-val">—</span></div>
+      <div class="st-row"><span class="st-label">Fuente activa</span><span id="st-source" class="st-val">—</span></div>
+      <div class="st-row"><span class="st-label">Watchdog</span><span id="st-wd" class="st-val">—</span></div>
+    </div>
+
+    <!-- TRANSMISIÓN -->
+    <div class="card">
+      <h2>🎚 Transmisión</h2>
+      <div class="btn-grid">
+        <button class="btn btn-green" onclick="act('stream/start','Iniciar transmisión')">▶ Iniciar</button>
+        <button class="btn btn-red"   onclick="confirmAct('stream/stop','Detener la transmisión','El canal va a salir del aire.')">⛔ Detener</button>
+        <button class="btn btn-amber" onclick="confirmAct('stream/restart','Reiniciar OBS','Mata OBS; el watchdog lo vuelve a levantar en unos segundos.')">🔄 Reiniciar OBS</button>
+        <button class="btn btn-slate" onclick="act('camera/restart','Reiniciar cámara')">📷 Reiniciar cámara</button>
+      </div>
+      <div class="hint">«Reiniciar OBS» cierra el proceso y deja que el watchdog lo relance. Usalo solo si reiniciar la cámara no alcanzó.</div>
+    </div>
+
+    <!-- FUENTES -->
+    <div class="card">
+      <h2>🎵 Fuentes de audio <span id="src-spin"></span></h2>
+      <div id="src-list"><div class="hint">Cargando fuentes…</div></div>
+      <div class="hint">El interruptor enciende/apaga la visibilidad de la fuente (el ícono del ojo en OBS).</div>
+    </div>
+
+    <!-- WATCHDOG -->
+    <div class="card">
+      <h2>🤖 Watchdog</h2>
+      <div class="st-row"><span class="st-label">Servicio</span><span id="wd-status" class="st-val">—</span></div>
+      <div class="btn-grid" style="margin-top:12px">
+        <button class="btn btn-green" onclick="act('watchdog/enable','Habilitar watchdog')">🟢 Habilitar</button>
+        <button class="btn btn-red"   onclick="confirmAct('watchdog/disable','Deshabilitar watchdog','Mientras esté apagado, nadie levanta OBS ni la cámara si se caen.')">🔴 Deshabilitar</button>
+        <button class="btn btn-slate btn-full" onclick="act('watchdog/restart','Reiniciar watchdog')">🔄 Reiniciar watchdog</button>
+      </div>
+    </div>
+
+    <!-- CAPTURA -->
+    <div class="card">
+      <h2>🖼 Al aire <span id="shot-spin"></span></h2>
+      <div id="shot-wrap"><div id="shot-empty">Tomá una captura para ver la pantalla del canal.</div></div>
+      <button class="btn btn-blue btn-full" style="margin-top:10px" onclick="loadShot()">📸 Tomar captura</button>
+      <div class="hint">Captura puntual del display de la PC OBS (vía ffmpeg). No es video en vivo.</div>
+    </div>
+
+    <!-- SISTEMA -->
+    <div class="card">
+      <h2>⚙️ Sistema</h2>
+      <button class="btn btn-red btn-full" onclick="confirmAct('system/reboot','Reiniciar la PC del canal','La PC queda unos minutos fuera de línea. Al volver, el watchdog levanta todo solo (requiere autologin configurado).')">🔁 Reiniciar la PC</button>
+      <div class="hint">Último recurso. Reinicia toda la máquina que hostea OBS.</div>
+    </div>
+
+    <!-- LOGS -->
+    <div class="card wide">
+      <h2>📋 Logs</h2>
+      <div class="log-bar">
+        <select id="log-svc">
+          <option value="watchdog">Watchdog</option>
+          <option value="obs">OBS</option>
+          <option value="camara">Cámara</option>
+        </select>
+        <button class="btn btn-ghost" style="padding:7px 14px" onclick="loadLogs()">Ver logs</button>
+      </div>
+      <pre id="log-out">Elegí un servicio y tocá «Ver logs».</pre>
+    </div>
+
+  </div>
+
+  <div id="toast"></div>
+
+  <div id="modal">
+    <div class="modal-box">
+      <h3 id="modal-title"></h3>
+      <p id="modal-msg"></p>
+      <div class="modal-actions">
+        <button class="btn btn-slate" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-red" id="modal-ok">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+const $ = s => document.querySelector(s);
+
+// ── toast ────────────────────────────────────────────────
+let toastT;
+function toast(msg, kind='ok'){
+  const t = $('#toast');
+  t.textContent = msg;
+  t.className = 'show ' + kind;
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.className = '', 3200);
+}
+
+// ── API ──────────────────────────────────────────────────
+async function api(method, path){
+  const r = await fetch('/obs/' + path, {method});
+  let body = null;
+  try { body = await r.json(); } catch(e){}
+  if(!r.ok){
+    const detail = (body && body.detail) ? body.detail : ('HTTP ' + r.status);
+    throw new Error(detail);
+  }
+  return body;
+}
+
+function setConn(ok){
+  const dot = $('#conn-dot'), txt = $('#conn-txt');
+  if(ok){ dot.className = 'ok'; txt.textContent = 'conectado'; }
+  else  { dot.className = 'err'; txt.textContent = 'sin conexión'; }
+}
+
+// ── acciones POST ────────────────────────────────────────
+async function act(path, label, btn){
+  try{
+    await api('POST', path);
+    toast('✅ ' + label, 'ok');
+    setConn(true);
+    setTimeout(refreshStatus, 600);
+    if(path.startsWith('watchdog')) setTimeout(refreshStatus, 600);
+  }catch(e){
+    toast('❌ ' + label + ': ' + e.message, 'err');
+    setConn(false);
+  }
+}
+
+// ── modal de confirmación ────────────────────────────────
+function confirmAct(path, title, msg){
+  $('#modal-title').textContent = title + '?';
+  $('#modal-msg').textContent = msg;
+  $('#modal').classList.add('show');
+  const ok = $('#modal-ok');
+  ok.onclick = () => { closeModal(); act(path, title); };
+}
+function closeModal(){ $('#modal').classList.remove('show'); }
+$('#modal').addEventListener('click', e => { if(e.target.id === 'modal') closeModal(); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape') closeModal(); });
+
+// ── estado ───────────────────────────────────────────────
+let polling = false;
+async function refreshStatus(){
+  if(polling) return;
+  polling = true;
+  try{
+    const s = await api('GET', 'status');
+    setConn(true);
+
+    $('#st-stream').innerHTML = s.stream_active
+      ? '<span class="pill on"><span class="pill-dot"></span>AL AIRE</span>'
+      : '<span class="pill off"><span class="pill-dot"></span>FUERA DE AIRE</span>';
+    $('#st-time').textContent   = s.stream_timecode || '—';
+    $('#st-scene').textContent  = s.current_scene || '—';
+    $('#st-source').textContent = s.current_source || '—';
+
+    const wdOn = (s.watchdog_status || '').trim() === 'active';
+    const wdHtml = wdOn
+      ? '<span class="pill on"><span class="pill-dot"></span>activo</span>'
+      : '<span class="pill warn"><span class="pill-dot"></span>' + (s.watchdog_status || 'inactivo') + '</span>';
+    $('#st-wd').innerHTML    = wdHtml;
+    $('#wd-status').innerHTML = wdHtml;
+  }catch(e){
+    setConn(false);
+  }finally{
+    polling = false;
+  }
+}
+
+// ── fuentes ──────────────────────────────────────────────
+async function refreshSources(){
+  const spin = $('#src-spin');
+  spin.innerHTML = '<span class="spinner dark"></span>';
+  try{
+    const list = await api('GET', 'sources');
+    setConn(true);
+    const cont = $('#src-list');
+    if(!list || !list.length){ cont.innerHTML = '<div class="hint">No hay fuentes en la escena.</div>'; return; }
+    cont.innerHTML = '';
+    for(const f of list){
+      const row = document.createElement('div');
+      row.className = 'src-row';
+      row.innerHTML =
+        '<span class="src-name"><span class="eye">' + (f.enabled ? '👁' : '🚫') + '</span>' + escapeHtml(f.name) + '</span>' +
+        '<label class="toggle"><input type="checkbox" ' + (f.enabled ? 'checked' : '') + '><span class="slider"></span></label>';
+      const input = row.querySelector('input');
+      input.addEventListener('change', () => toggleSource(f.name, input.checked, row));
+      cont.appendChild(row);
+    }
+  }catch(e){
+    setConn(false);
+    $('#src-list').innerHTML = '<div class="hint">No se pudieron cargar las fuentes.</div>';
+  }finally{
+    spin.innerHTML = '';
+  }
+}
+
+async function toggleSource(name, enabled, row){
+  const tog = row.querySelector('.toggle');
+  const input = row.querySelector('input');
+  tog.classList.add('busy');
+  try{
+    await api('POST', 'sources/' + encodeURIComponent(name) + '/' + (enabled ? 'enable' : 'disable'));
+    toast((enabled ? '✅ ' : '⬜ ') + name + (enabled ? ' activada' : ' desactivada'), 'ok');
+    row.querySelector('.eye').textContent = enabled ? '👁' : '🚫';
+    setTimeout(refreshStatus, 600);
+  }catch(e){
+    toast('❌ ' + name + ': ' + e.message, 'err');
+    input.checked = !enabled; // revertir
+  }finally{
+    tog.classList.remove('busy');
+  }
+}
+
+// ── captura ──────────────────────────────────────────────
+function loadShot(){
+  const spin = $('#shot-spin'), wrap = $('#shot-wrap');
+  spin.innerHTML = '<span class="spinner dark"></span>';
+  const img = new Image();
+  img.id = 'shot-img';
+  img.onload = () => { wrap.innerHTML = ''; wrap.appendChild(img); spin.innerHTML = ''; setConn(true); };
+  img.onerror = () => { spin.innerHTML = ''; toast('❌ No se pudo capturar la pantalla', 'err'); setConn(false); };
+  img.src = '/obs/screenshot?t=' + Date.now();
+}
+
+// ── logs ─────────────────────────────────────────────────
+async function loadLogs(){
+  const svc = $('#log-svc').value;
+  const out = $('#log-out');
+  out.textContent = 'Cargando…';
+  try{
+    const r = await api('GET', 'logs/' + svc + '?lines=80');
+    setConn(true);
+    out.textContent = (r.logs || '(sin salida)').trim();
+    out.scrollTop = out.scrollHeight;
+  }catch(e){
+    setConn(false);
+    out.textContent = 'Error: ' + e.message;
+  }
+}
+
+// ── util ─────────────────────────────────────────────────
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function refreshAll(){ refreshStatus(); refreshSources(); }
+
+// ── arranque + polling ───────────────────────────────────
+refreshAll();
+let timer = setInterval(() => { if(!document.hidden) refreshStatus(); }, 8000);
+document.addEventListener('visibilitychange', () => { if(!document.hidden) refreshStatus(); });
+</script>
+</body>
+</html>

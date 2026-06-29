@@ -194,6 +194,11 @@ Solo se reportan las fuentes programables (las del schedule + musica).
   "Cambiá a FM Espacio"
   "Poné Radio San Nicolás"
   "Cambiá a Radio Pop"
+  "Desactivá la fuente Radio Pop"
+  "Apagá FM Espacio"
+
+Activar/desactivar manipula el ícono del ojo (visibilidad) de
+la fuente en la escena: activar la enciende, desactivar la apaga.
 
 Fuentes disponibles:
   · musica          → música de fondo (fuente por defecto)
@@ -239,10 +244,28 @@ necesidad de conectar un monitor físico.
 
   /obs watchdog              → estado del watchdog
   /obs watchdog restart      → reiniciar el watchdog
+  /obs watchdog enable       → habilitar (arrancar) el watchdog
+  /obs watchdog disable      → deshabilitar (detener) el watchdog
   "Estado del watchdog"
+  "Deshabilitá el watchdog"
+  "Habilitá el watchdog"
 
 El watchdog monitorea OBS continuamente y actúa si detecta
 que OBS se cayó o hay problemas de video.
+
+⚠️ Mientras el watchdog está deshabilitado, nadie levanta OBS
+ni la cámara si se caen. Acordate de volver a habilitarlo.
+
+── Reiniciar la PC del canal ────────────────────────────
+
+  /obs reboot
+  "Reiniciá la PC"
+  "Reiniciá la computadora"
+
+Reinicia la PC remota que hostea OBS. Queda unos minutos fuera
+de línea; al volver, el watchdog levanta OBS y la cámara solo.
+Usalo solo si el canal quedó en un estado que no se resuelve
+reiniciando OBS o la cámara por separado.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  NOTIFICACIONES AUTOMÁTICAS OBS

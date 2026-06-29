@@ -339,9 +339,25 @@ def _manejar_obs(text: str) -> str:
             if accion == "restart":
                 obs_service.restart_watchdog()
                 return "🔄 Watchdog reiniciado."
+            if accion in ("enable", "habilitar", "on"):
+                obs_service.enable_watchdog()
+                return "🟢 Watchdog habilitado."
+            if accion in ("disable", "deshabilitar", "off"):
+                obs_service.disable_watchdog()
+                return (
+                    "🔴 Watchdog deshabilitado. Mientras esté apagado nadie "
+                    "levanta OBS ni la cámara si se caen."
+                )
             wd = obs_service.get_watchdog_status()
             fuente = wd.get("state", {}).get("current_source", "?")
             return f"🤖 Watchdog: {wd['status']}\n🎵 Fuente activa: {fuente}"
+
+        if subcomando in ("reboot", "reiniciar-pc"):
+            obs_service.reboot_pc()
+            return (
+                "🔁 Reiniciando la PC del canal. Va a estar unos minutos fuera "
+                "de línea; el watchdog levanta todo solo al volver."
+            )
 
         if subcomando == "fuentes":
             fuentes = obs_service.get_sources()
@@ -378,7 +394,8 @@ def _manejar_obs(text: str) -> str:
             "  /obs activar <Nombre>\n"
             "  /obs desactivar <Nombre>\n"
             "  /obs camara\n"
-            "  /obs watchdog [restart]\n"
+            "  /obs watchdog [restart|enable|disable]\n"
+            "  /obs reboot\n"
             "  /obs logs [obs|watchdog|camara]"
         )
 

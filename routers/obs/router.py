@@ -1,13 +1,30 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from routers.obs import service
 
 router = APIRouter(prefix="/obs", tags=["obs"])
+templates = Jinja2Templates(directory="templates")
 
 
 def _ssh_error(e: Exception):
     raise HTTPException(status_code=503, detail=str(e))
+
+
+@router.get("/panel", response_class=HTMLResponse)
+def panel(request: Request):
+    return templates.TemplateResponse(request=request, name="obs.html")
+
+
+@router.get("/screenshot")
+def screenshot():
+    try:
+        png = service.get_screenshot()
+        return Response(content=png, media_type="image/png")
+    except Exception as e:
+        _ssh_error(e)
 
 
 @router.get("/status")
@@ -104,6 +121,33 @@ def watchdog_status():
 def watchdog_restart():
     try:
         service.restart_watchdog()
+        return {"ok": True}
+    except Exception as e:
+        _ssh_error(e)
+
+
+@router.post("/watchdog/enable")
+def watchdog_enable():
+    try:
+        service.enable_watchdog()
+        return {"ok": True}
+    except Exception as e:
+        _ssh_error(e)
+
+
+@router.post("/watchdog/disable")
+def watchdog_disable():
+    try:
+        service.disable_watchdog()
+        return {"ok": True}
+    except Exception as e:
+        _ssh_error(e)
+
+
+@router.post("/system/reboot")
+def system_reboot():
+    try:
+        service.reboot_pc()
         return {"ok": True}
     except Exception as e:
         _ssh_error(e)

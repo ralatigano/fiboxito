@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from routers.obs.config import (
     OBS_SSH_HOST, OBS_SSH_PORT, OBS_SSH_USER, OBS_SSH_PASSWORD,
     OBS_SCENE_NAME, OBS_DEFAULT_SOURCE, OBS_WS_SCRIPT, OBS_STATE_FILE, OBS_PROGRAMS_FILE,
+    OBS_REBOOT_CMD,
 )
 from routers.obs.ssh_client import SSHClient
 from routers.obs.watchdog_ctrl import WatchdogController
@@ -236,6 +237,26 @@ def get_watchdog_status() -> dict:
 def restart_watchdog():
     with _ssh() as ssh:
         WatchdogController(ssh).restart()
+
+
+def enable_watchdog():
+    """Habilita (arranca) el servicio del watchdog."""
+    with _ssh() as ssh:
+        WatchdogController(ssh).start()
+
+
+def disable_watchdog():
+    """Deshabilita (detiene) el servicio del watchdog."""
+    with _ssh() as ssh:
+        WatchdogController(ssh).stop()
+
+
+# ── PC ─────────────────────────────────────────────────────────
+
+def reboot_pc():
+    """Reinicia la PC que hostea OBS. El watchdog vuelve a levantar todo al arrancar."""
+    with _ssh() as ssh:
+        ssh.run_command(OBS_REBOOT_CMD)
 
 
 # ── Estado para poller de notificaciones ───────────────────────

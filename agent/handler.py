@@ -229,6 +229,24 @@ def _procesar_obs(user_message: str) -> tuple[str, bytes | None]:
             obs.restart_watchdog()
             return "🔄 Watchdog reiniciado.", None
 
+        if accion == "enable_watchdog":
+            obs.enable_watchdog()
+            return "🟢 Watchdog habilitado.", None
+
+        if accion == "disable_watchdog":
+            obs.disable_watchdog()
+            return (
+                "🔴 Watchdog deshabilitado. Ojo: mientras esté apagado nadie "
+                "va a levantar OBS ni la cámara si se caen."
+            ), None
+
+        if accion == "reboot_pc":
+            obs.reboot_pc()
+            return (
+                "🔁 Reiniciando la PC del canal. Va a estar unos minutos fuera "
+                "de línea; el watchdog levanta todo solo al volver."
+            ), None
+
         if accion == "watchdog_status":
             wd = obs.get_watchdog_status()
             return f"🤖 Watchdog: {wd['status']}", None
