@@ -5,6 +5,12 @@ whitelist.json
 # Claves SSH (NAS, etc.) — NUNCA versionar la privada
 keys/
 
+# Base de datos local (datos de comprobantes/clientes) — no versionar
+fibox.db
+fibox.db-wal
+fibox.db-shm
+*.db
+
 # Logs
 logs/
 
