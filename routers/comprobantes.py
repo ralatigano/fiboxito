@@ -114,6 +114,7 @@ def _validar(datos: dict, monto_esperado: float | None) -> dict:
         "numero_operacion": str(datos.get("numero_operacion") or "").strip() or None,
         "destinatario_ok":  dest_ok,
         "destinatario_detectado": datos.get("destinatario_nombre"),
+        "monto_valor":      monto,
         "monto_detectado":  f"${monto:,.2f}" if monto is not None else None,
         "monto_suficiente": monto_suficiente,
         "fecha_detectada":  fecha.strftime("%d/%m/%Y") if fecha else None,

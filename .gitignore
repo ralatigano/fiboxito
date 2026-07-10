@@ -2,6 +2,9 @@
 .env
 whitelist.json
 
+# Claves SSH (NAS, etc.) — NUNCA versionar la privada
+keys/
+
 # Logs
 logs/
 
@@ -22,3 +25,5 @@ venv/
 
 # VSCode
 .vscode/
+
+Correcciones y mejoras.txt

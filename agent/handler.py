@@ -7,6 +7,7 @@ from clients.wispro import (
 )
 from clients.ollama import ask_ollama
 from agent.intent import detectar_intencion, clasificar_intent_obs, extraer_termino_busqueda
+from agent import acciones
 from agent.prompts import (
     prompt_saludo, prompt_cliente_no_encontrado,
     prompt_cliente_sin_termino, prompt_general,
@@ -95,8 +96,21 @@ def respuesta_directa(
 
 
 def procesar_mensaje(chat_id: int, user_message: str, nombre_usuario: str) -> tuple[str, bytes | None]:
-    intencion = detectar_intencion(user_message)
+    # 0) ¿Hay una acción sensible (corte/reconexión) esperando confirmación?
+    if acciones.hay_pendiente(chat_id):
+        resp = acciones.resolver_confirmacion(chat_id, user_message)
+        if resp is not None:
+            actualizar_historial(chat_id, "user", user_message)
+            actualizar_historial(chat_id, "assistant", resp)
+            return resp, None
+
+    intencion = detectar_intencion(user_message, chat_id)
     log_debug(f"[INTENT] '{user_message}' → '{intencion}'")
+
+    # Si el usuario cambió de tema, cerramos la sesión de navegación NAS.
+    if intencion != "nas":
+        from routers.nas.telegram_ops import cerrar_sesion
+        cerrar_sesion(chat_id)
 
     actualizar_historial(chat_id, "user", user_message)
     ctx = contexto_reciente(chat_id)
@@ -112,7 +126,19 @@ def procesar_mensaje(chat_id: int, user_message: str, nombre_usuario: str) -> tu
         actualizar_historial(chat_id, "assistant", respuesta)
         return respuesta, imagen
 
+    if intencion == "nas":
+        respuesta, adjunto = _procesar_nas(chat_id, user_message)
+        actualizar_historial(chat_id, "assistant", respuesta)
+        return respuesta, adjunto
+
     if intencion == "consulta_cliente":
+
+        # Acción sensible: cortar / reactivar servicio (requiere confirmación)
+        accion = acciones.detectar_accion_contrato(msg)
+        if accion:
+            respuesta = acciones.preparar(chat_id, user_message, accion)
+            actualizar_historial(chat_id, "assistant", respuesta)
+            return respuesta, None
 
         if any(p in msg for p in ["último cliente", "ultimo cliente", "últimos clientes", "ultimos clientes", "último id", "nuevo cliente"]):
             clientes = obtener_ultimos_clientes()
@@ -173,6 +199,18 @@ def procesar_mensaje(chat_id: int, user_message: str, nombre_usuario: str) -> tu
     respuesta = ask_ollama(prompt_general(user_message, nombre_usuario, ctx))
     actualizar_historial(chat_id, "assistant", respuesta)
     return respuesta, None
+
+
+# ── NAS ────────────────────────────────────────────────────────
+
+def _procesar_nas(chat_id: int, user_message: str):
+    """Navegación conversacional del NAS (con estado por chat).
+
+    Devuelve (texto, adjunto) donde adjunto puede ser None o la tupla
+    (bytes, nombre, mime) que la capa de polling manda como documento.
+    """
+    from routers.nas import telegram_ops as nas_tg
+    return nas_tg.navegar(chat_id, user_message)
 
 
 # ── OBS ────────────────────────────────────────────────────────

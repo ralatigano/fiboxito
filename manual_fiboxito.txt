@@ -4,8 +4,10 @@
 ╚══════════════════════════════════════════════════════╝
 
 Fiboxito es un bot de Telegram que permite consultar clientes,
-facturas, IPs disponibles, analizar comprobantes de pago y
-controlar el canal de streaming OBS, todo desde Telegram.
+facturas, IPs disponibles, analizar comprobantes de pago,
+cortar o reactivar el servicio de un cliente, navegar los
+archivos del servidor interno y controlar el canal de streaming
+OBS, todo desde Telegram.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  ACCESO
@@ -27,9 +29,11 @@ Tu chat_id lo obtenés escribiéndole al bot sin autorización:
   /help [tema]     → Ayuda detallada sobre un tema
   /agregar [id]    → (solo admins) Autoriza un chat_id
   /obs [subcomando]→ Control directo del canal OBS
+  /nas [subcomando]→ Navegar los archivos del servidor
 
 Temas disponibles para /help:
-  cliente · factura · pdf · ip · comprobante · agregar
+  cliente · factura · pdf · ip · comprobante ·
+  servicio · nas · agregar
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  CONSULTAS DE CLIENTES
@@ -53,6 +57,31 @@ Datos que podés consultar:
 
 La información se consulta en Wispro por lo que es necesario que se
 encuentre registrada ahí o el bot contestará con "info vacía".
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ CORTAR / REACTIVAR EL SERVICIO DE UN CLIENTE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Fiboxito puede suspender la conexión de internet de un cliente
+(por ejemplo, por falta de pago) y también volver a habilitarla.
+
+Ejemplos:
+  "Suspendé al cliente 1240"
+  "Cortale el servicio a González"
+  "Reactivá al cliente 1240"
+  "Reconectá el contrato 2002"
+
+⚠️ IMPORTANTE: es una acción que afecta el servicio real del
+cliente, así que Fiboxito SIEMPRE pide confirmación antes de
+tocar nada. Primero te dice qué va a hacer y a quién; recién
+lo ejecuta si respondés "sí". Con "no" (o cualquier otra cosa)
+se cancela sin cambios.
+
+Si el cliente tiene más de un contrato, Fiboxito te los lista
+para que elijas cuál, indicándolo con "contrato <número>".
+
+Si el servicio ya está en el estado pedido (por ejemplo, querés
+cortar algo que ya está cortado), te lo avisa y no hace nada.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  FACTURAS Y PDF
@@ -133,6 +162,25 @@ Fiboxito actúa sin intervención humana:
 
 El ciclo de revisión corre cada 1 minuto.
 Este proceso está deshabilitado en modo DEBUG (entorno de desarrollo).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ PLANILLA DE COMPROBANTES (Excel)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Cada comprobante que Fiboxito evalúa queda registrado en una
+planilla de Excel guardada en el servidor de archivos, con una
+fila por comprobante. Las columnas son las mismas que informa
+por Telegram (resultado, motivo, quién envió, quién recibió,
+monto, N° de operación, enlace) más:
+
+  · Fecha del comprobante (día/mes/año)
+  · Mes (para poder filtrar la planilla por período)
+  · Registrado (cuándo lo procesó Fiboxito)
+
+La planilla se actualiza sola con cada comprobante nuevo. Si en
+ese momento alguien la tiene abierta, Fiboxito no la pisa: deja
+el dato guardado y la pone al día cuando se libera, así nunca se
+pierde información ni se daña el archivo.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  CONTROL DEL CANAL OBS
@@ -285,6 +333,47 @@ mpv cada 30 minutos como parte del funcionamiento normal).
 
 El poller OBS está deshabilitado en modo DEBUG salvo que se
 configure OBS_POLLER_ENABLED=true en el .env.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ ARCHIVOS DEL SERVIDOR (NAS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Fiboxito puede entrar al servidor de archivos de la oficina
+para navegar carpetas, buscar y traer archivos. La navegación
+es "conversacional": Fiboxito recuerda en qué carpeta estás
+parado y te va mostrando el contenido a cada paso.
+
+── Navegar hablándole normal ───────────────────────────
+
+  "Mostrame la raíz"          → lista la carpeta actual
+  "Entrá a Connelec1"         → baja a esa carpeta
+  "Mostrame el contenido de la carpeta FM"
+  "Volvé atrás"               → sube un nivel
+  "Andá a la raíz"            → vuelve al inicio
+  "Buscá el archivo tal"      → lo busca en la carpeta actual
+                                 y las de adentro
+  "Traeme tal archivo"        → te lo envía al chat
+
+Cada respuesta te muestra en qué carpeta quedaste parado.
+
+── Con el comando /nas ─────────────────────────────────
+
+  /nas ls [carpeta]     → listar (la actual si no indicás)
+  /nas cd <carpeta>     → entrar a una carpeta
+  /nas up               → subir un nivel
+  /nas root             → volver a la raíz
+  /nas get <archivo>    → traer un archivo
+  /nas buscar <texto>   → buscar un archivo
+
+── Qué puede tocar ─────────────────────────────────────
+
+Fiboxito trabaja con acceso restringido: solo ve las carpetas
+habilitadas y solo puede guardar archivos en la carpeta que se
+le asignó para eso; en el resto es de solo lectura. La conexión
+con el servidor es privada y cifrada.
+
+⚠️ No guardes archivos con datos sensibles (contraseñas,
+credenciales) en las carpetas a las que Fiboxito accede.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  ADMINISTRACIÓN

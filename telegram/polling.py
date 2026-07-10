@@ -9,6 +9,7 @@ from telegram.helpers import send_message, send_document, send_photo, analizar_f
 from agent.handler import procesar_mensaje
 from routers.obs import service as obs_service
 from routers.obs.config import OBS_SSH_HOST
+from routers.nas import telegram_ops as nas_tg
 
 AYUDA_TEMAS: dict[str, str] = {
     "cliente": (
@@ -84,6 +85,33 @@ AYUDA_TEMAS: dict[str, str] = {
         "  /manual\n\n"
         "El bot te envía el archivo con toda la documentación."
     ),
+    "servicio": (
+        "Cortar / reactivar servicio\n"
+        "────────────────────────────\n"
+        "Suspender o restablecer la conexión de un cliente:\n\n"
+        '  "suspendé al cliente 1240"\n'
+        '  "cortale el servicio a González"\n'
+        '  "reactivá al cliente 1240"\n'
+        '  "reconectá el contrato 2002"\n\n'
+        "Fiboxito SIEMPRE pide confirmación antes de tocar el\n"
+        "servicio: respondé 'sí' para confirmar o 'no' para cancelar.\n"
+        "Si el cliente tiene varios contratos, te los lista para\n"
+        'que elijas con "contrato <número>".'
+    ),
+    "nas": (
+        "Archivos del servidor (NAS)\n"
+        "────────────────────────────\n"
+        "Navegá carpetas y traé archivos del server:\n\n"
+        "  /nas ls [carpeta]      → listar (raíz si no indicás)\n"
+        "  /nas get <ruta>        → traer un archivo\n\n"
+        "Ejemplos:\n"
+        "  /nas ls Connelec1/FM\n"
+        "  /nas get Fibox/Publicidad/logo.png\n\n"
+        "En lenguaje natural:\n"
+        '  "listá la carpeta Connelec1"\n'
+        '  "traeme Connelec1/streamFibox.txt"\n\n'
+        "Fiboxito lee toda la estructura y escribe solo en Fibox."
+    ),
 }
 
 AYUDA_ALIAS: dict[str, str] = {
@@ -93,6 +121,10 @@ AYUDA_ALIAS: dict[str, str] = {
     "ips":          "ip",
     "comprobantes": "comprobante",
     "pago":         "comprobante",
+    "suspender":    "servicio",
+    "cortar":       "servicio",
+    "reactivar":    "servicio",
+    "corte":        "servicio",
 }
 
 
@@ -266,6 +298,21 @@ async def polling_loop():
                         log_debug(f"[CMD] /obs → chat_id={chat_id}")
                         continue
 
+                    # --- COMANDO /nas ---
+                    if text.startswith("/nas"):
+                        resp_nas, adj_nas = await loop.run_in_executor(
+                            None, lambda t=text: nas_tg.manejar_comando(chat_id, t)
+                        )
+                        await loop.run_in_executor(None, lambda r=resp_nas: send_message(chat_id, r))
+                        if adj_nas:
+                            data, fname, mime = adj_nas
+                            await loop.run_in_executor(
+                                None,
+                                lambda: send_document(chat_id, data, fname, mime)
+                            )
+                        log_debug(f"[CMD] /nas → chat_id={chat_id}")
+                        continue
+
                     # --- MENSAJE NORMAL ---
                     texto, adjunto = await loop.run_in_executor(
                         None, lambda t=text, n=nombre_usuario: procesar_mensaje(chat_id, t, n)
@@ -273,7 +320,13 @@ async def polling_loop():
                     await loop.run_in_executor(None, lambda: send_message(chat_id, texto))
 
                     if adjunto:
-                        if texto.startswith("📷"):
+                        if isinstance(adjunto, tuple):
+                            # Archivo del NAS: (bytes, nombre, mime)
+                            data, fname, mime = adjunto
+                            await loop.run_in_executor(
+                                None, lambda: send_document(chat_id, data, fname, mime)
+                            )
+                        elif texto.startswith("📷"):
                             await loop.run_in_executor(
                                 None, lambda: send_photo(chat_id, adjunto)
                             )

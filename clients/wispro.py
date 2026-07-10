@@ -18,6 +18,23 @@ def wispro_get(endpoint: str, params: dict = None, timeout: int = 10) -> dict:
     return data
 
 
+def wispro_patch(endpoint: str, payload: dict, timeout: int = 15) -> tuple[int, dict]:
+    url = f"{WISPRO_URL}/api/v1/{endpoint}"
+    log_debug(f"[WISPRO] PATCH {url} payload={payload}")
+    res = requests.patch(
+        url,
+        headers={**WISPRO_HEADERS, "Content-Type": "application/json"},
+        json=payload,
+        timeout=timeout,
+    )
+    try:
+        data = res.json()
+    except ValueError:
+        data = {}
+    log_debug(f"[WISPRO] PATCH http={res.status_code} body_status={data.get('status')}")
+    return res.status_code, data
+
+
 def buscar_cliente(termino: str) -> dict | None:
     if termino.isdigit():
         data = wispro_get("clients", {"public_id_eq": termino})
@@ -31,8 +48,28 @@ def buscar_cliente(termino: str) -> dict | None:
 def obtener_contratos(client_id: str) -> list:
     data = wispro_get("contracts", {"client_id_eq": client_id})
     if data.get("status") == 200:
-        return data.get("data", [])
+        d = data.get("data", [])
+        return d if isinstance(d, list) else [d]
     return []
+
+
+def obtener_contrato_por_public_id(public_id: str) -> dict | None:
+    data = wispro_get("contracts", {"public_id_eq": public_id})
+    if data.get("status") == 200 and data.get("data"):
+        d = data["data"]
+        return d[0] if isinstance(d, list) else d
+    return None
+
+
+def cambiar_estado_contrato(contract_id: str, estado: str) -> tuple[bool, dict]:
+    """PATCH /contracts/{id} con {state}. estado ∈ {enabled, alerted, disabled}.
+    Devuelve (ok, data)."""
+    http, data = wispro_patch(f"contracts/{contract_id}", {"state": estado})
+    ok = http == 200 and (data.get("status") in (200, None) if isinstance(data, dict) else False)
+    if not ok:
+        log_error(f"[WISPRO] No se pudo cambiar contrato {contract_id} a '{estado}': "
+                  f"http={http} data={data}")
+    return ok, data
 
 
 def obtener_cuenta_corriente(client_id: str) -> dict | None:

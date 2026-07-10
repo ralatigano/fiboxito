@@ -34,26 +34,114 @@ _PALABRAS_OBS = [
 ]
 
 
-def detectar_intencion(texto: str) -> str:
+# Intent NAS (navegar/traer archivos del servidor).
+# "factura/pdf/boleta" desactivan NAS para no chocar con el PDF de facturas.
+_PALABRAS_NAS = [
+    "nas", "carpeta", "carpetas", "directorio", "connelec",
+    "archivo", "archivos", "servidor de archivos",
+]
+# Sustantivos inequívocos de NAS.
+_NAS_NOUN = ["carpeta", "carpetas", "directorio", "connelec", "nas",
+             "servidor de archivos"]
+# Verbos de navegación (no existen en OBS): entrar/subir/raíz.
+_NAV_VERBS = ["entrá", "entra", "abrí", "abri", "andá", "anda", "navegá",
+              "navega", "volvé", "volve", "retrocedé", "retrocede", "subí",
+              "subi", "atrás", "atras", "raíz", "raiz"]
+_SEARCH_VERBS = ["buscá", "busca", "buscar", "encontrá", "encontra"]
+_TRAER_VERBS = ["traeme", "traé", "descargá", "descarga", "bajá", "baja",
+                "pasame", "mandame"]
+
+# Palabras que indican una ACCIÓN/estado de OBS (no un nombre de archivo). Sirven
+# para que, aun dentro de una sesión de navegación NAS, un comando real de OBS
+# gane igual.
+_OBS_ACCION = [
+    "iniciá", "inicia", "arrancá", "arranca", "encendé", "enciende",
+    "empezá", "empieza", "pará", "para", "cortá", "corta", "detené", "detene",
+    "frená", "frena", "stop", "reiniciá", "reinicia", "reboot", "restart",
+    "activá", "activa", "desactivá", "desactiva", "habilitá", "deshabilitá",
+    "prendé", "prende", "apagá", "apaga", "silenciá", "silencia", "muteá",
+    "mutea", "silencio", "foto", "captura", "screenshot", "logs", "estado",
+    "status", "fuente", "fuentes", "aire", "watchdog",
+]
+
+
+def _es_nas_fuerte(t: str) -> bool:
+    # Nota: acá NO filtramos por "factura/pdf" porque un archivo puede llamarse
+    # así ("buscá el archivo factura"); el guard vive en el _es_nas débil.
+    if any(w in t for w in _NAS_NOUN):
+        return True
+    if "/" in t and any(w in t for w in ["archivo"] + _TRAER_VERBS + ["entrá", "abrí"]):
+        return True
+    if any(w in t for w in _NAV_VERBS):
+        return True
+    # Buscar un ARCHIVO (search a secas es de clientes: "buscame a González").
+    if any(w in t for w in _SEARCH_VERBS) and "archivo" in t:
+        return True
+    return False
+
+
+def _es_nas(t: str) -> bool:
+    if any(w in t for w in ["factura", "pdf", "boleta"]):
+        return False
+    return any(w in t for w in _PALABRAS_NAS)
+
+
+def _obs_accion(t: str) -> bool:
+    return any(w in t for w in _OBS_ACCION)
+
+
+def detectar_intencion(texto: str, chat_id=None) -> str:
     t = texto.lower().strip()
 
     saludos = {
         "hola", "buenas", "qué tal", "que tal", "hey",
         "hola fiboxito", "buenos días", "buenas tardes", "buenas noches",
     }
-    palabras_cliente = [
+    # Señales FUERTES de cliente (sustantivos/acciones propias del dominio):
+    # ganan incluso durante una sesión de navegación NAS.
+    palabras_cliente_fuerte = [
         "cliente", "saldo", "factura", "facturas",
-        "cuenta corriente", "contrato", "habilitar", "suspender",
-        "deshabilitar", "cortar", "dni", "número", "pasame", "dame",
-        "mostrame", "buscame", "busca", "pdf", "última factura",
+        "cuenta corriente", "contrato", "dni", "pdf", "última factura",
         "último cliente", "ultimo cliente", "últimos clientes", "ultimos clientes",
         "ip libre", "ips libres", "ip disponible", "ips disponibles",
+        # Acciones de servicio (cortar/reactivar) — todas sus conjugaciones
+        "habilitar", "habilitá", "suspender", "suspendé", "suspende",
+        "deshabilitar", "deshabilitá", "cortar", "cortá", "cortale",
+        "reactivar", "reactivá", "reconectar", "reconectá", "restablecer",
+        "restablecé", "dar de baja", "dar de alta", "reconexión",
     ]
+    # Verbos genéricos (también sirven para navegar): solo derivan a cliente si
+    # NO hay una sesión NAS abierta.
+    palabras_cliente = palabras_cliente_fuerte + [
+        "número", "pasame", "dame", "mostrame", "buscame", "busca",
+    ]
+
+    # ¿Hay una sesión de navegación NAS abierta para este chat?
+    en_sesion_nas = False
+    if chat_id is not None:
+        try:
+            from routers.nas.telegram_ops import en_sesion
+            en_sesion_nas = en_sesion(chat_id)
+        except Exception:  # noqa: BLE001
+            en_sesion_nas = False
 
     if t in saludos:
         return "saludo"
-    if any(p in t for p in _PALABRAS_OBS):
+    # NAS fuerte va antes que OBS (un path puede contener "stream", "canal", etc.)
+    if _es_nas_fuerte(t):
+        return "nas"
+    # OBS gana si es un comando/estado real de OBS. Dentro de una sesión NAS,
+    # solo gana si hay una ACCIÓN de OBS (para no robar nombres de archivo).
+    if any(p in t for p in _PALABRAS_OBS) and (not en_sesion_nas or _obs_accion(t)):
         return "obs"
+    # Señales fuertes de cliente ganan siempre (saldo, factura, contrato...).
+    if any(p in t for p in palabras_cliente_fuerte):
+        return "consulta_cliente"
+    if _es_nas(t):
+        return "nas"
+    # Mientras se navega el NAS, los verbos genéricos siguen la navegación.
+    if en_sesion_nas:
+        return "nas"
     if any(p in t for p in palabras_cliente):
         return "consulta_cliente"
     return "general"

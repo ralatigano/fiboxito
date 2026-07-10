@@ -7,15 +7,17 @@ from datetime import datetime
 
 from db import get_conn
 from routers.comprobantes import _analizar_url, _veredicto
+from routers.comprobantes_export import exportar as exportar_excel, hay_export_pendiente
 
-WISPRO_URL    = os.getenv("WISPRO_URL", "").rstrip("/")
-WISPRO_TOKEN  = os.getenv("WISPRO_TOKEN", "")
+WISPRO_URL = os.getenv("WISPRO_URL", "").rstrip("/")
+WISPRO_TOKEN = os.getenv("WISPRO_TOKEN", "")
 WISPRO_CAT_ID = os.getenv("WISPRO_COMPROBANTE_CATEGORY_ID", "")
-POLL_SECS     = int(os.getenv("OPA_POLL_INTERVAL", "120"))
-TG_TOKEN          = os.getenv("TELEGRAM_TOKEN", "")
-TG_REPORT_TARGETS = [x.strip() for x in os.getenv("TELEGRAM_ADMIN_CHAT_ID", "").split(",") if x.strip()]
+POLL_SECS = int(os.getenv("OPA_POLL_INTERVAL", "120"))
+TG_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
+TG_REPORT_TARGETS = [x.strip() for x in os.getenv(
+    "TELEGRAM_GROUP_CHAT_ID", "").split(",") if x.strip()]
 
-IMG_PATTERN      = r"https://[^\s\"']*holasuite\.com/atendente/services/download[^\s\n\"']*"
+IMG_PATTERN = r"https://[^\s\"']*holasuite\.com/atendente/services/download[^\s\n\"']*"
 CONTACTO_PATTERN = r"Contacto:\s*(.+)"
 
 log = logging.getLogger("fiboxito")
@@ -32,26 +34,45 @@ def init_tabla_comprobantes():
                 url_imagen    TEXT,
                 resultado     TEXT,
                 motivo        TEXT,
-                procesado_at  TEXT NOT NULL
+                procesado_at  TEXT NOT NULL,
+                contacto_wa   TEXT,
+                emisor        TEXT,
+                monto         REAL,
+                numero_op     TEXT,
+                fecha         TEXT
             )
         """)
+        # Migración para bases existentes: agregar columnas nuevas si faltan.
+        cols = {r["name"] for r in conn.execute(
+            "PRAGMA table_info(comprobantes_procesados)").fetchall()}
+        for col, tipo in (("contacto_wa", "TEXT"), ("emisor", "TEXT"),
+                          ("monto", "REAL"), ("numero_op", "TEXT"),
+                          ("fecha", "TEXT")):
+            if col not in cols:
+                conn.execute(
+                    f"ALTER TABLE comprobantes_procesados ADD COLUMN {col} {tipo}")
 
 
 def _ya_procesado(issue_id: str) -> bool:
     with get_conn() as conn:
         return conn.execute(
-            "SELECT 1 FROM comprobantes_procesados WHERE issue_id=?", (issue_id,)
+            "SELECT 1 FROM comprobantes_procesados WHERE issue_id=?", (
+                issue_id,)
         ).fetchone() is not None
 
 
-def _marcar_procesado(issue_id, protocolo, url, resultado, motivo):
+def _marcar_procesado(issue_id, protocolo, url, resultado, motivo,
+                      contacto_wa=None, emisor=None, monto=None,
+                      numero_op=None, fecha=None):
     with get_conn() as conn:
         conn.execute("""
             INSERT OR IGNORE INTO comprobantes_procesados
-              (issue_id, protocolo, url_imagen, resultado, motivo, procesado_at)
-            VALUES (?,?,?,?,?,?)
+              (issue_id, protocolo, url_imagen, resultado, motivo, procesado_at,
+               contacto_wa, emisor, monto, numero_op, fecha)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
         """, (issue_id, protocolo, url, resultado, motivo,
-               datetime.utcnow().isoformat()))
+              datetime.utcnow().isoformat(),
+              contacto_wa, emisor, monto, numero_op, fecha))
 
 
 def init_tabla_operaciones():
@@ -69,7 +90,8 @@ def init_tabla_operaciones():
 def _operacion_ya_usada(numero: str) -> bool:
     with get_conn() as conn:
         return conn.execute(
-            "SELECT 1 FROM operaciones_registradas WHERE numero_operacion=?", (numero,)
+            "SELECT 1 FROM operaciones_registradas WHERE numero_operacion=?", (
+                numero,)
         ).fetchone() is not None
 
 
@@ -101,7 +123,8 @@ async def _get_issues_pendientes(client: httpx.AsyncClient) -> list:
         resp.raise_for_status()
         body = resp.json()
         data = body.get("data", [])
-        all_issues.extend(i for i in data if i.get("category_id") == WISPRO_CAT_ID)
+        all_issues.extend(i for i in data if i.get(
+            "category_id") == WISPRO_CAT_ID)
         pagination = body.get("meta", {}).get("pagination", {})
         if page >= pagination.get("total_pages", 1):
             break
@@ -130,7 +153,8 @@ async def _notificar_telegram(texto: str):
             try:
                 await client.post(
                     f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage",
-                    json={"chat_id": target, "text": texto, "parse_mode": "HTML"},
+                    json={"chat_id": target, "text": texto,
+                          "parse_mode": "HTML"},
                 )
             except Exception as e:
                 log.error(f"[POLLER] Error Telegram (destino {target}): {e}")
@@ -142,10 +166,12 @@ async def opa_polling_loop():
     init_tabla_comprobantes()
     init_tabla_operaciones()
     if not WISPRO_URL or not WISPRO_TOKEN or not WISPRO_CAT_ID:
-        log.warning("[POLLER] Faltan WISPRO_URL / WISPRO_TOKEN / WISPRO_COMPROBANTE_CATEGORY_ID — poller deshabilitado.")
+        log.warning(
+            "[POLLER] Faltan WISPRO_URL / WISPRO_TOKEN / WISPRO_COMPROBANTE_CATEGORY_ID — poller deshabilitado.")
         return
 
-    log.info(f"[POLLER] Iniciado — Wispro help_desk categoría {WISPRO_CAT_ID} (cada {POLL_SECS}s)")
+    log.info(
+        f"[POLLER] Iniciado — Wispro help_desk categoría {WISPRO_CAT_ID} (cada {POLL_SECS}s)")
     while True:
         try:
             await _ciclo()
@@ -159,9 +185,9 @@ async def _ciclo():
         issues = await _get_issues_pendientes(client)
 
         for issue in issues:
-            issue_id  = issue.get("id")
+            issue_id = issue.get("id")
             protocolo = issue.get("title", "?")
-            desc      = issue.get("description", "")
+            desc = issue.get("description", "")
 
             if not issue_id or _ya_procesado(issue_id):
                 continue
@@ -170,23 +196,24 @@ async def _ciclo():
             if not m:
                 continue
 
-            url_img  = m.group()
+            url_img = m.group()
             mc = re.search(CONTACTO_PATTERN, desc)
             contacto_wa = mc.group(1).strip() if mc else None
-            log.info(f"[POLLER] Comprobante nuevo: {protocolo} (issue {issue_id})")
+            log.info(
+                f"[POLLER] Comprobante nuevo: {protocolo} (issue {issue_id})")
 
-            analisis  = {}
+            analisis = {}
             resultado = "ERROR"
-            motivo    = "Sin resultado"
+            motivo = "Sin resultado"
             numero_op = None
             try:
                 loop = asyncio.get_event_loop()
-                analisis  = await loop.run_in_executor(None, _analizar_url, url_img)
+                analisis = await loop.run_in_executor(None, _analizar_url, url_img)
                 numero_op = analisis.get("numero_operacion")
 
                 if numero_op and _operacion_ya_usada(numero_op):
                     resultado = "NO OK"
-                    motivo    = f"Comprobante duplicado: el N° de operación {numero_op} ya fue registrado."
+                    motivo = f"Comprobante duplicado: el N° de operación {numero_op} ya fue registrado."
                 else:
                     resultado, motivo = _veredicto(analisis, None)
                     if numero_op and resultado == "OK":
@@ -194,9 +221,17 @@ async def _ciclo():
 
             except Exception as e:
                 resultado, motivo = "ERROR", str(e)
-                log.error(f"[POLLER] Error analizando imagen de {protocolo}: {e}")
+                log.error(
+                    f"[POLLER] Error analizando imagen de {protocolo}: {e}")
 
-            _marcar_procesado(issue_id, protocolo, url_img, resultado, motivo)
+            monto_disp = analisis.get("monto_detectado")
+            monto_val  = analisis.get("monto_valor")
+            emisor     = analisis.get("emisor_nombre")
+            fecha_det  = analisis.get("fecha_detectada")
+
+            _marcar_procesado(issue_id, protocolo, url_img, resultado, motivo,
+                              contacto_wa=contacto_wa, emisor=emisor,
+                              monto=monto_val, numero_op=numero_op, fecha=fecha_det)
             log.info(f"[POLLER] {protocolo} → {resultado}: {motivo}")
 
             notif = (
@@ -206,10 +241,8 @@ async def _ciclo():
             )
             if contacto_wa:
                 notif += f"\n📱 Envió: {contacto_wa}"
-            monto = analisis.get("monto_detectado")
-            if monto:
-                notif += f"\n💰 Monto: {monto}"
-            emisor = analisis.get("emisor_nombre")
+            if monto_disp:
+                notif += f"\n💰 Monto: {monto_disp}"
             if emisor:
                 notif += f"\n👤 Pagó: {emisor}"
             if numero_op:
@@ -219,9 +252,8 @@ async def _ciclo():
             desc_ticket = f"[Fiboxito] {resultado}: {motivo}"
             if emisor:
                 desc_ticket += f"\nPagó: {emisor}"
-            if monto:
-                desc_ticket += f"\nMonto: {monto}"
-            fecha_det = analisis.get("fecha_detectada")
+            if monto_disp:
+                desc_ticket += f"\nMonto: {monto_disp}"
             if fecha_det:
                 desc_ticket += f"\nFecha: {fecha_det}"
             if numero_op:
@@ -230,5 +262,20 @@ async def _ciclo():
                 desc_ticket += f"\nContacto: {contacto_wa}"
             desc_ticket += f"\nComprobante: {url_img}"
 
+            # Actualizar el Excel del NAS (regenera desde la base). Bloqueante →
+            # en executor para no frenar el event loop.
+            loop = asyncio.get_event_loop()
+            export = await loop.run_in_executor(None, exportar_excel)
+            if export["estado"] == "diferido":
+                notif += "\n📄 <i>Excel abierto por alguien: se actualizará al cerrarlo.</i>"
+            elif export["estado"] == "error":
+                notif += "\n⚠️ <i>No se pudo actualizar el Excel del NAS.</i>"
+
             await _finalizar_issue(client, issue_id, desc_ticket)
             await _notificar_telegram(notif)
+
+        # Reintento del export si quedó pendiente (p.ej. Excel abierto en un
+        # ciclo previo): al cerrarlo, el próximo ciclo lo pone al día solo.
+        if hay_export_pendiente():
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, exportar_excel)

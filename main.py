@@ -13,6 +13,7 @@ from routers import comprobantes as comprobantes_router
 from routers import opa_poller
 from routers.obs import router as obs_router
 from routers.obs.poller import obs_polling_loop
+from routers.nas import router as nas_router
 from telegram.polling import polling_loop
 
 
@@ -37,3 +38,4 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(mapa_router.router)
 app.include_router(comprobantes_router.router)
 app.include_router(obs_router.router)
+app.include_router(nas_router.router)
