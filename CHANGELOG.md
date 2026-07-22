@@ -11,6 +11,20 @@ Las fechas están en formato AAAA-MM-DD. Lo más nuevo va arriba.
 
 ---
 
+## v1.2.0 — 2026-07-22
+
+### Nuevas funcionalidades
+
+- **Arranque automático y aviso de reactivación.**
+  Si el equipo donde vive Fiboxito se reinicia (por ejemplo tras un corte de
+  luz), Fiboxito **vuelve a ponerse en marcha solo** al iniciar sesión de
+  Windows, sin que nadie tenga que abrir nada a mano. Al levantar, avisa por
+  Telegram a los administradores con un mensaje de **"Fiboxito volvió a estar
+  activo"** indicando el equipo y la hora, para que quede claro que ya está
+  operando de nuevo.
+
+---
+
 ## v1.1.0 — 2026-07-10
 
 ### Nuevas funcionalidades

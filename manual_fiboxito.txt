@@ -410,3 +410,16 @@ negativo (ej. -1001234567890). Agregalo igual:
     OBS_CAMERA_ALERT_DELAY (default: 120 segundos).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ ARRANQUE AUTOMÁTICO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  · Si el equipo donde vive Fiboxito se reinicia (por ejemplo
+    tras un corte de luz), Fiboxito vuelve a ponerse en marcha
+    solo al iniciar sesión de Windows.
+  · Cuando levanta, avisa a los administradores por Telegram con
+    el mensaje "Fiboxito volvió a estar activo" (indica el equipo
+    y la hora). Ese aviso confirma que ya está operando de nuevo.
+  · El aviso se puede silenciar con STARTUP_NOTIFY=false en el
+    .env.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
