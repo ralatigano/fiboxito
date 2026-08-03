@@ -316,6 +316,82 @@ Usalo solo si el canal quedó en un estado que no se resuelve
 reiniciando OBS o la cámara por separado.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ PANEL WEB DE OBS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Además del bot, el canal se puede operar desde un panel web en
+el navegador (misma red): estado en vivo, botones de la
+transmisión, fuentes de audio, watchdog, captura de pantalla
+y logs.
+
+── Botón "Diagnóstico" ──────────────────────────────────
+
+Si algo del canal no anda y no sabés por dónde empezar, tocá
+"Ejecutar diagnóstico". En unos segundos revisa la PC del
+canal y te muestra, en castellano claro, un resumen con
+semáforo:
+
+  🟢 lo que está bien
+  🟡 lo que conviene mirar
+  🔴 un problema serio
+
+Para cada punto te dice qué está pasando y, cuando corresponde,
+qué botón del panel tocar (por ejemplo "Reiniciar cámara" o
+"Reiniciar la PC"). Chequea de una sola pasada: si la
+transmisión está realmente saliendo al aire o solo "figura"
+activa, si hay OBS o cámara duplicados o trabados, si el
+watchdog está activo, si la cámara está conectada, si alguna
+radio quedó sin audio y si la PC está sobrecargada o sin
+espacio.
+
+El diagnóstico NO cambia nada en la PC: solo mira y traduce.
+Pensado para que cualquiera entienda qué pasa sin necesidad de
+leer los registros técnicos. Cuando un problema se resuelve con
+una acción del panel (reiniciar OBS, la cámara, el watchdog o la
+PC), el propio aviso muestra ese botón para resolverlo ahí mismo.
+
+── Confirmación de los botones ──────────────────────────
+
+Cuando tocás un botón del panel, el aviso ahora llega en dos
+pasos: primero "enviado, verificando…" y, unos segundos
+después, el resultado real con semáforo:
+
+  🟢 salió bien (ej.: al aire y saliendo señal)
+  🟡 quedó a medias (ej.: al aire pero reconectando, o la
+     cámara todavía no volvió)
+  🔴 no se pudo confirmar
+
+Así sabés no solo que el comando se mandó, sino si la PC del
+canal realmente lo hizo.
+
+── Visor de logs en vivo ────────────────────────────────
+
+El visor de logs tiene un selector (watchdog, OBS o cámara) y
+botones tipo reproductor:
+
+  ▶  ver en vivo (se actualiza solo cada pocos segundos)
+  ⏸  pausar (congela lo que estás viendo)
+  ⏹  detener
+
+Mientras está en vivo se ve un indicador "● EN VIVO". Para no
+recargar la conexión con la PC del canal, solo consulta con la
+ventana abierta y a la vista; se frena al pausar, detener o
+cambiar de pestaña. Conviene detenerlo cuando terminás de mirar.
+
+── Captura de pantalla ──────────────────────────────────
+
+Hay dos botones para ver una foto del canal:
+
+  📸 Ver al aire     → lo que OBS está transmitiendo (el
+                       programa). Es la rápida y limpia, ideal
+                       para el día a día.
+  🖥 Ver pantalla real → el escritorio de la PC del canal. Es
+                       más lenta, pero sirve aunque OBS esté
+                       trabado y no responda (para diagnóstico).
+
+Ninguna es video en vivo: es una foto puntual del momento.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  NOTIFICACIONES AUTOMÁTICAS OBS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

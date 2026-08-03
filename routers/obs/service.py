@@ -17,6 +17,10 @@ _LOG_UNITS = {
     "camera":     "camara",
 }
 
+# Patrones de cuelgue de GPU en el log del kernel (radeon/AMD Bonaire).
+# Validados contra los incidentes reales del 02/08 y 03/08.
+_GPU_LOCKUP_RE = r"GPU lockup|ring [0-9].*stalled|couldn.t schedule ib|radeon.*Oops"
+
 
 @contextmanager
 def _ssh():
@@ -90,6 +94,12 @@ def get_status() -> dict:
         current_scene  = scene_resp.get("currentProgramSceneName", "?")
         current_source = _get_current_source(ssh)
 
+        # ¿Hay cámara corriendo? (para verificar el "reiniciar cámara" del panel)
+        cam_out, _ = ssh.run_command(
+            "pgrep -f 'title=CAMARA' > /dev/null && echo active || echo inactive"
+        )
+        camara_active = cam_out.strip() == "active"
+
         wd        = WatchdogController(ssh)
         wd_status = wd.get_status()
         try:
@@ -100,9 +110,12 @@ def get_status() -> dict:
         return {
             "ssh_ok":          True,
             "stream_active":   stream_data.get("outputActive", False),
+            "stream_reconnecting": stream_data.get("outputReconnecting", False),
+            "stream_bytes":    stream_data.get("outputBytes", 0) or 0,
             "stream_timecode": stream_data.get("outputTimecode"),
             "current_scene":   current_scene,
             "current_source":  current_source,
+            "camara_active":   camara_active,
             "watchdog_status": wd_status,
             "watchdog_state":  wd_state,
         }
@@ -195,7 +208,8 @@ def restart_camera():
 
 
 def get_screenshot() -> bytes:
-    """Captura un frame del display :0 vía ffmpeg y lo retorna como PNG."""
+    """Captura un frame del display :0 vía ffmpeg y lo retorna como PNG.
+    Muestra la PANTALLA REAL de la PC (sirve aunque OBS esté trabado)."""
     import io
     with _ssh() as ssh:
         ssh.run_command(
@@ -211,6 +225,25 @@ def get_screenshot() -> bytes:
             sftp.close()
         buf.seek(0)
         return buf.read()
+
+
+def get_screenshot_program(width: int = 960) -> bytes:
+    """Captura el PROGRAMA compuesto de OBS vía WebSocket (GetSourceScreenshot).
+    Es "lo que sale al aire": rápido (~0.2s) y limpio, sin artefactos de grab.
+    Requiere OBS/WebSocket vivo → si OBS está trabado, usar get_screenshot()."""
+    import base64
+    with _ssh() as ssh:
+        scene = _ws(ssh, "GetCurrentProgramScene").get("currentProgramSceneName", OBS_SCENE_NAME)
+        resp  = _ws(ssh, "GetSourceScreenshot", {
+            "sourceName":              scene,
+            "imageFormat":             "jpg",
+            "imageWidth":              width,
+            "imageCompressionQuality": 80,
+        })
+        data = resp.get("imageData", "")
+        if not isinstance(data, str) or "," not in data:
+            raise ValueError("OBS no devolvió imagen (WebSocket caído o OBS sin responder)")
+        return base64.b64decode(data.split(",", 1)[1])
 
 
 # ── Logs ───────────────────────────────────────────────────────
@@ -279,7 +312,7 @@ def get_poll_state() -> dict:
         # obs-moldes está en el grupo 'adm' → puede leer journalctl -k sin sudo.
         gpu_out, _ = ssh.run_command(
             "journalctl -k --since '90 sec ago' --no-pager 2>/dev/null | "
-            "grep -Ei 'GPU lockup|ring [0-9].*stalled|couldn.t schedule ib|radeon.*Oops' | tail -3"
+            f"grep -Ei '{_GPU_LOCKUP_RE}' | tail -3"
         )
 
         return {
@@ -304,3 +337,322 @@ def set_programs(programs: list):
     safe    = payload.replace("'", "'\\''")
     with _ssh() as ssh:
         ssh.run_command(f"echo '{safe}' > {OBS_PROGRAMS_FILE}")
+
+
+# ── Diagnóstico determinístico ─────────────────────────────────
+# Chequeo de salud que corre las firmas de falla YA catalogadas (sin LLM) y las
+# traduce a castellano llano con su nivel 🔴/🟡/🟢 y qué botón tocar.
+
+_LEVEL_ORDER = {"error": 3, "warn": 2, "info": 1, "ok": 0}
+
+# Botones que ya existen en el panel, para ofrecer la acción dentro del hallazgo.
+# `confirm` (opcional) → el front abre el modal de confirmación antes de ejecutar.
+_BTN_START_STREAM = {"label": "▶ Iniciar transmisión", "path": "stream/start", "kind": "green"}
+_BTN_RESTART_OBS  = {"label": "🔄 Reiniciar OBS", "path": "stream/restart", "kind": "amber",
+                     "confirm": {"title": "Reiniciar OBS",
+                                 "msg": "Mata OBS; el watchdog lo vuelve a levantar en unos segundos."}}
+_BTN_RESTART_CAM  = {"label": "📷 Reiniciar cámara", "path": "camera/restart", "kind": "slate"}
+_BTN_WD_ENABLE    = {"label": "🟢 Habilitar watchdog", "path": "watchdog/enable", "kind": "green"}
+_BTN_WD_RESTART   = {"label": "🔄 Reiniciar watchdog", "path": "watchdog/restart", "kind": "slate"}
+_BTN_REBOOT_PC    = {"label": "🔁 Reiniciar la PC", "path": "system/reboot", "kind": "red",
+                     "confirm": {"title": "Reiniciar la PC del canal",
+                                 "msg": "La PC queda unos minutos fuera de línea. Al volver, "
+                                        "el watchdog levanta todo solo."}}
+
+
+def _fnd(level: str, titulo: str, detalle: str,
+         accion: str | None = None, boton: dict | None = None) -> dict:
+    return {"level": level, "titulo": titulo, "detalle": detalle,
+            "accion": accion, "boton": boton}
+
+
+def _clip(s: str, n: int = 320) -> str:
+    s = (s or "").strip()
+    return s if len(s) <= n else s[:n] + "…"
+
+
+def _safe(ssh: SSHClient, cmd: str, timeout: int = 15) -> str:
+    """Corre un comando y devuelve stdout limpio; nunca lanza (para sondas del diagnóstico)."""
+    try:
+        out, _ = ssh.run_command(cmd, timeout=timeout)
+        return out.strip()
+    except Exception:
+        return ""
+
+
+def _collect_diagnostics(ssh: SSHClient) -> dict:
+    """Junta todas las señales de salud en una sola sesión SSH."""
+    import time
+    raw: dict = {}
+
+    # Transmisión: dos muestras para ver si outputBytes crece (data saliendo de verdad).
+    s1 = _ws(ssh, "GetStreamStatus")
+    time.sleep(2.5)
+    s2 = _ws(ssh, "GetStreamStatus")
+    raw["stream"] = {
+        "active":       s2.get("outputActive", False),
+        "reconnecting": s2.get("outputReconnecting", False),
+        "bytes":        s2.get("outputBytes", 0) or 0,
+        "bytes_prev":   s1.get("outputBytes", 0) or 0,
+        "timecode":     s2.get("outputTimecode"),
+        "skipped":      s2.get("outputSkippedFrames", 0) or 0,
+        "total":        s2.get("outputTotalFrames", 0) or 0,
+    }
+
+    # Escena / fuente activa + fuentes encendidas (para no gritar por radios apagadas).
+    raw["scene"]  = _ws(ssh, "GetCurrentProgramScene").get("currentProgramSceneName")
+    items = _ws(ssh, "GetSceneItemList", {"sceneName": OBS_SCENE_NAME}).get("sceneItems", [])
+    raw["enabled_sources"] = [it.get("sourceName") for it in items if it.get("sceneItemEnabled")]
+    raw["source"] = _get_current_source(ssh)
+
+    # OBS: cantidad de instancias y estado (D = trabado en el driver, Z = zombie).
+    obs_pids = _safe(ssh, "pgrep -x obs")
+    raw["obs_count"] = len([l for l in obs_pids.splitlines() if l.strip()])
+    obs_stat = _safe(ssh, "ps -eo stat=,comm= | awk '$2==\"obs\"{print $1}'")
+    raw["obs_stuck"] = any(st[:1] in ("D", "Z") for st in obs_stat.split())
+
+    # Watchdog: servicio de sistema + duplicados (bug del watchdog de usuario).
+    # El patrón ancla al final para no contar el propio wrapper `sh -c` de este comando.
+    raw["wd_active"]  = _safe(ssh, "systemctl is-active obs-watchdog")
+    raw["wd_dupes"]   = _safe(ssh, "pgrep -fc 'watchdog\\.sh$'") or "0"
+    raw["state_json"] = _safe(ssh, f"cat {OBS_STATE_FILE}")
+
+    # Cámara: mpv corriendo + conexión establecida al puerto RTSP (554).
+    raw["mpv_count"] = _safe(ssh, "pgrep -xc mpv") or "0"
+    raw["cam_estab"] = _safe(ssh, "ss -tn state established 2>/dev/null | grep -c ':554'") or "0"
+
+    # GPU lockup en el log del kernel (ventana amplia para diagnóstico on-demand).
+    raw["gpu_lockup"] = _safe(
+        ssh,
+        "journalctl -k --since '15 min ago' --no-pager 2>/dev/null | "
+        f"grep -Ei '{_GPU_LOCKUP_RE}' | tail -3",
+    )
+
+    # Audio: error de autenticación (HTTP 401) en el log de OBS → radio caída.
+    raw["audio_401"] = _safe(
+        ssh,
+        "f=$(ls -t ~/.config/obs-studio/logs/*.txt 2>/dev/null | head -1); "
+        "[ -n \"$f\" ] && grep -iE '401|authentication failed' \"$f\" | tail -2",
+    )
+
+    # Sistema: carga, núcleos y disco.
+    raw["loadavg"] = _safe(ssh, "cat /proc/loadavg")
+    raw["nproc"]   = _safe(ssh, "nproc") or "1"
+    raw["disk"]    = _safe(ssh, "df -P / | tail -1 | awk '{print $5}'")
+
+    return raw
+
+
+def _evaluate_diagnostics(raw: dict) -> list[dict]:
+    """Aplica las reglas sobre las señales crudas y arma los hallazgos en castellano."""
+    f: list[dict] = []
+    st = raw.get("stream", {})
+
+    # ── Transmisión ─────────────────────────────────────────────
+    if not st.get("active"):
+        f.append(_fnd(
+            "error", "La transmisión está fuera del aire",
+            "OBS no está transmitiendo.",
+            "Iniciá la transmisión. Si no arranca, revisá OBS y la cámara acá abajo.",
+            _BTN_START_STREAM,
+        ))
+    elif st.get("reconnecting"):
+        f.append(_fnd(
+            "warn", "La transmisión está reconectando",
+            "OBS figura al aire pero está reintentando conectar con el servidor: "
+            "se puede ver cortado o congelado.",
+            "Esperá unos segundos y volvé a diagnosticar. Si sigue, reiniciá OBS.",
+            _BTN_RESTART_OBS,
+        ))
+    elif st.get("bytes", 0) <= st.get("bytes_prev", 0):
+        f.append(_fnd(
+            "warn", "Dice al aire pero no está saliendo data",
+            "OBS figura activo pero los datos enviados no aumentan: probablemente "
+            "el servidor de streaming no está recibiendo la señal.",
+            "Reiniciá OBS y volvé a diagnosticar para ver que los datos suban.",
+            _BTN_RESTART_OBS,
+        ))
+    else:
+        f.append(_fnd(
+            "ok", "Transmisión al aire y saliendo data",
+            f"Enviando datos con normalidad (tiempo al aire {st.get('timecode') or '—'}).",
+        ))
+
+    # Frames perdidos (PC exigida).
+    total, skipped = st.get("total", 0) or 0, st.get("skipped", 0) or 0
+    if total > 0 and skipped / total > 0.05:
+        pct = round(skipped / total * 100, 1)
+        f.append(_fnd(
+            "warn", "Se están perdiendo cuadros de video",
+            f"{pct}% de cuadros omitidos ({skipped}/{total}): la PC no da abasto para "
+            "codificar el video (CPU o GPU al límite).",
+            "Puede venir de la mano de un problema de GPU; revisá los puntos de abajo.",
+        ))
+
+    # ── GPU lockup ──────────────────────────────────────────────
+    if raw.get("gpu_lockup"):
+        f.append(_fnd(
+            "error", "Se colgó la placa de video (GPU)",
+            "El registro del sistema muestra un cuelgue de la placa de video. Esto es lo "
+            "que en el pasado dejó OBS congelado por horas.\n" + _clip(raw["gpu_lockup"]),
+            "Reiniciá la PC del canal. Si el reinicio se cuelga, el watchdog de hardware "
+            "la recupera sola.",
+            _BTN_REBOOT_PC,
+        ))
+
+    # ── OBS (proceso) ───────────────────────────────────────────
+    n_obs = raw.get("obs_count", 0)
+    if n_obs == 0:
+        f.append(_fnd(
+            "error", "OBS no está corriendo",
+            "No hay ningún proceso de OBS en la PC del canal.",
+            "El watchdog debería levantarlo solo. Si no aparece, reiniciá el watchdog.",
+            _BTN_WD_RESTART,
+        ))
+    elif n_obs > 1:
+        f.append(_fnd(
+            "error", f"Hay {n_obs} OBS corriendo a la vez",
+            "Dos instancias de OBS pelean por la placa de video y por el mismo destino de "
+            "transmisión → imagen entrecortada y fallas de conexión.",
+            "Reiniciá OBS para que quede una sola.",
+            _BTN_RESTART_OBS,
+        ))
+    elif raw.get("obs_stuck"):
+        f.append(_fnd(
+            "error", "OBS está trabado y no responde",
+            "El proceso de OBS quedó en un estado del que no sale ni cerrándolo "
+            "(trabado en el driver de video). Suele ser secuela de un cuelgue de GPU.",
+            "Reiniciá la PC del canal.",
+            _BTN_REBOOT_PC,
+        ))
+    else:
+        f.append(_fnd("ok", "OBS corriendo con una sola instancia", "Proceso único y respondiendo."))
+
+    # ── Watchdog ────────────────────────────────────────────────
+    wd    = raw.get("wd_active", "")
+    dupes = int(raw.get("wd_dupes", "0") or 0)
+    if wd != "active":
+        f.append(_fnd(
+            "warn", "El watchdog no está activo",
+            f"El servicio del watchdog figura «{wd or 'desconocido'}». Mientras esté apagado, "
+            "nadie levanta OBS ni la cámara si se caen.",
+            "Habilitá el watchdog. (Un «failed» justo después de pararlo a mano es esperable; "
+            "en ese caso alcanza con reiniciarlo.)",
+            _BTN_WD_ENABLE,
+        ))
+    elif dupes > 1:
+        f.append(_fnd(
+            "error", f"Hay {dupes} watchdogs corriendo a la vez",
+            "Watchdogs duplicados (el de sistema y uno de usuario) se pisan entre sí y "
+            "duplican OBS y la cámara. Es la causa raíz de varios problemas viejos.",
+            "Hay que deshabilitar el watchdog de usuario por SSH: "
+            "`systemctl --user disable --now obs-watchdog`.",
+        ))
+    else:
+        try:
+            le = json.loads(raw.get("state_json") or "{}").get("last_error", "none")
+        except Exception:
+            le = "none"
+        if le and le not in ("none", ""):
+            f.append(_fnd(
+                "warn", "El watchdog anotó un error reciente",
+                f"Último error registrado por el watchdog: «{le}».",
+                "Mirá los logs del watchdog (abajo) para el detalle.",
+            ))
+        else:
+            f.append(_fnd("ok", "Watchdog activo y sin errores", "Vigilando OBS y la cámara."))
+
+    # ── Cámara ──────────────────────────────────────────────────
+    mpv   = int(raw.get("mpv_count", "0") or 0)
+    estab = int(raw.get("cam_estab", "0") or 0)
+    if mpv == 0:
+        f.append(_fnd(
+            "warn", "La cámara no está corriendo",
+            "No hay ningún reproductor de cámara activo en la PC.",
+            "Reiniciá la cámara.",
+            _BTN_RESTART_CAM,
+        ))
+    elif mpv > 1:
+        f.append(_fnd(
+            "warn", f"Hay {mpv} reproductores de cámara",
+            "Varios reproductores compiten por la misma cámara → imagen entrecortada.",
+            "Reiniciá la cámara para que quede uno solo.",
+            _BTN_RESTART_CAM,
+        ))
+    elif estab == 0:
+        f.append(_fnd(
+            "warn", "La cámara no tiene conexión con el equipo",
+            "El reproductor está abierto pero sin conexión establecida a la cámara "
+            "(puede estar apagada, colgada o sin red).",
+            "Reiniciá la cámara. Si sigue, revisá la cámara y la red.",
+            _BTN_RESTART_CAM,
+        ))
+    else:
+        f.append(_fnd("ok", "Cámara conectada", "Reproductor activo y conectado al equipo."))
+
+    # ── Audio ───────────────────────────────────────────────────
+    # El 401 queda en el log de OBS aunque la radio ya esté apagada. Solo es un
+    # problema ACTUAL si hay una radio encendida (las radios apagadas a esta hora
+    # son lo normal; sale la fuente 'musica').
+    enabled   = raw.get("enabled_sources") or []
+    radios_on = [n for n in enabled if n and "radio" in n.lower()]
+    if raw.get("audio_401") and radios_on:
+        f.append(_fnd(
+            "warn", "Una radio encendida falló por autenticación",
+            "Hay una radio encendida (" + ", ".join(radios_on) + ") y el log de OBS muestra "
+            "un error de autenticación (401): esa radio puede estar saliendo sin sonido. "
+            "No corta el video.",
+            "Revisá la URL o las credenciales de la radio, o apagala y usá otra fuente de audio.",
+        ))
+
+    # ── Sistema (carga / disco) ─────────────────────────────────
+    try:
+        load1 = float((raw.get("loadavg") or "0").split()[0])
+        ncpu  = max(int(raw.get("nproc", "1") or 1), 1)
+        if load1 / ncpu > 2.0:
+            f.append(_fnd(
+                "warn", "La PC del canal está muy cargada",
+                f"Carga {load1:.1f} para {ncpu} núcleos: el equipo está exigido y puede "
+                "entrecortar el video.",
+                "Suele venir junto con problemas de GPU o cámara; revisá los puntos de arriba.",
+            ))
+    except Exception:
+        pass
+    disk = (raw.get("disk") or "").rstrip("%")
+    if disk.isdigit() and int(disk) >= 90:
+        f.append(_fnd(
+            "warn", "Queda poco espacio en disco",
+            f"El disco de la PC del canal está al {disk}%.",
+            "Conviene liberar espacio para que no se corten los logs ni la grabación.",
+        ))
+
+    return f
+
+
+def run_diagnostics() -> dict:
+    """Corre el diagnóstico completo y devuelve veredicto + hallazgos ordenados por severidad."""
+    from datetime import datetime
+    with _ssh() as ssh:
+        raw = _collect_diagnostics(ssh)
+
+    findings = _evaluate_diagnostics(raw)
+    findings.sort(key=lambda x: _LEVEL_ORDER.get(x["level"], 0), reverse=True)
+
+    n_err  = sum(1 for x in findings if x["level"] == "error")
+    n_warn = sum(1 for x in findings if x["level"] == "warn")
+    if n_err:
+        verdict = "error"
+        resumen = f"{n_err} problema(s) serio(s)" + (f" y {n_warn} advertencia(s)" if n_warn else "")
+    elif n_warn:
+        verdict = "warn"
+        resumen = f"{n_warn} advertencia(s), sin problemas graves"
+    else:
+        verdict = "ok"
+        resumen = "Todo en orden"
+
+    return {
+        "verdict":  verdict,
+        "resumen":  resumen,
+        "findings": findings,
+        "ts":       datetime.now().strftime("%H:%M:%S"),
+    }

@@ -84,12 +84,30 @@
 
     /* logs */
     .log-bar{display:flex;gap:8px;margin-bottom:10px}
+    .log-bar select{flex:1}
+    .log-bar .btn{flex:0 0 auto;padding:8px 13px;font-size:14px;line-height:1}
+    #log-live{font-size:11px;font-weight:600;color:#64748b;display:none;align-items:center;gap:6px;
+      text-transform:none;letter-spacing:0}
+    #log-live.on{display:inline-flex}
+    #log-live .dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+    #log-live.playing{color:#4ade80}
+    #log-live.playing .dot{animation:pulse 1.2s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
     select{background:#0f1f3d;border:1px solid #1e3a5f;border-radius:6px;color:#e2e8f0;
       font-size:13px;padding:7px 9px;outline:none;flex:1}
     select:focus{border-color:#3b82f6}
     pre#log-out{background:#0b1120;border:1px solid #1e3a5f;border-radius:7px;padding:11px;
       font-size:11px;line-height:1.5;color:#cbd5e1;max-height:300px;overflow:auto;
       white-space:pre-wrap;word-break:break-word;font-family:'Cascadia Code','Consolas',monospace}
+
+    /* diagnóstico */
+    #diag-body{display:flex;flex-direction:column;gap:8px}
+    .diag-summary{padding:10px 12px;border:1px solid #1e3a5f;border-radius:8px;font-size:13px}
+    .diag-summary .diag-ts{color:#64748b;font-size:11px;font-weight:400}
+    .diag-item{padding:10px 12px;border:1px solid #1e3a5f;border-radius:8px}
+    .diag-t{font-size:13px;font-weight:600;color:#e2e8f0;margin-bottom:3px}
+    .diag-d{font-size:12px;color:#94a3b8;line-height:1.55}
+    .diag-a{font-size:12px;color:#cbd5e1;margin-top:6px}
 
     .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.25);border-top-color:#fff;
       border-radius:50%;animation:spin .7s linear infinite;display:inline-block}
@@ -126,6 +144,15 @@
   </div>
 
   <div id="wrap">
+
+    <!-- DIAGNÓSTICO -->
+    <div class="card wide" id="diag-card">
+      <h2>🩺 Diagnóstico <span id="diag-spin"></span></h2>
+      <div id="diag-body">
+        <div class="hint">Ejecutá un chequeo para ver, en castellano, si algo anda mal y qué botón tocar.</div>
+      </div>
+      <button class="btn btn-blue btn-full" style="margin-top:12px" onclick="runDiag()">🩺 Ejecutar diagnóstico</button>
+    </div>
 
     <!-- ESTADO -->
     <div class="card">
@@ -169,10 +196,13 @@
 
     <!-- CAPTURA -->
     <div class="card">
-      <h2>🖼 Al aire <span id="shot-spin"></span></h2>
-      <div id="shot-wrap"><div id="shot-empty">Tomá una captura para ver la pantalla del canal.</div></div>
-      <button class="btn btn-blue btn-full" style="margin-top:10px" onclick="loadShot()">📸 Tomar captura</button>
-      <div class="hint">Captura puntual del display de la PC OBS (vía ffmpeg). No es video en vivo.</div>
+      <h2>🖼 Captura <span id="shot-spin"></span></h2>
+      <div id="shot-wrap"><div id="shot-empty">Tomá una captura para ver el canal.</div></div>
+      <div class="btn-grid" style="margin-top:10px">
+        <button class="btn btn-blue" onclick="loadShot('/obs/screenshot/program','lo que sale al aire','Si OBS no responde, probá «Ver pantalla real».')">📸 Ver al aire</button>
+        <button class="btn btn-ghost" onclick="loadShot('/obs/screenshot','la pantalla de la PC')">🖥 Ver pantalla real</button>
+      </div>
+      <div class="hint">«Al aire» es el programa de OBS (rápido y limpio). «Pantalla real» es el escritorio de la PC (ffmpeg) — sirve aunque OBS esté trabado. No es video en vivo.</div>
     </div>
 
     <!-- SISTEMA -->
@@ -184,16 +214,19 @@
 
     <!-- LOGS -->
     <div class="card wide">
-      <h2>📋 Logs</h2>
+      <h2>📋 Logs <span id="log-live"></span></h2>
       <div class="log-bar">
         <select id="log-svc">
           <option value="watchdog">Watchdog</option>
           <option value="obs">OBS</option>
           <option value="camara">Cámara</option>
         </select>
-        <button class="btn btn-ghost" style="padding:7px 14px" onclick="loadLogs()">Ver logs</button>
+        <button id="log-play"  class="btn btn-green" onclick="logPlay()"  title="Ver en vivo">▶</button>
+        <button id="log-pause" class="btn btn-slate" onclick="logPause()" title="Pausar">⏸</button>
+        <button id="log-stop"  class="btn btn-red"   onclick="logStop()"  title="Detener">⏹</button>
       </div>
-      <pre id="log-out">Elegí un servicio y tocá «Ver logs».</pre>
+      <pre id="log-out">Elegí un servicio y tocá ▶ para ver los logs en vivo.</pre>
+      <div class="hint">El "en vivo" consulta cada pocos segundos y solo mientras esta ventana está abierta y visible. Pausá o detené cuando termines.</div>
     </div>
 
   </div>
@@ -216,13 +249,14 @@ const $ = s => document.querySelector(s);
 
 // ── toast ────────────────────────────────────────────────
 let toastT;
-function toast(msg, kind='ok'){
+function toast(msg, kind='ok', sticky=false){
   const t = $('#toast');
   t.textContent = msg;
   t.className = 'show ' + kind;
   clearTimeout(toastT);
-  toastT = setTimeout(() => t.className = '', 3200);
+  if(!sticky) toastT = setTimeout(() => t.className = '', 3200);
 }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ── API ──────────────────────────────────────────────────
 async function api(method, path){
@@ -242,28 +276,81 @@ function setConn(ok){
   else  { dot.className = 'err'; txt.textContent = 'sin conexión'; }
 }
 
-// ── acciones POST ────────────────────────────────────────
-async function act(path, label, btn){
+// ── acciones POST (feedback de 2 etapas) ─────────────────
+// Etapa 1: "enviado, verificando…" (el HOST llegó a la PC OBS).
+// Etapa 2: unos segundos después re-consulta el estado real y muestra 🟢/🟡/🔴.
+function streamVerdict(s){
+  if(!s.stream_active)        return {level:'err',  txt:'sigue fuera de aire'};
+  if(s.stream_reconnecting)   return {level:'warn', txt:'al aire pero reconectando'};
+  if((s.stream_bytes || 0) <= 0) return {level:'warn', txt:'al aire pero sin datos saliendo'};
+  return {level:'ok', txt:'al aire y saliendo data'};
+}
+const wdActive = s => (s.watchdog_status || '').trim() === 'active';
+
+// path → cómo y cuándo verificar el resultado real de la acción.
+const VERIFY = {
+  'stream/start':     {delay:6000,  check:streamVerdict},
+  'stream/stop':      {delay:3000,  check:s => s.stream_active
+                        ? {level:'warn', txt:'todavía figura al aire'}
+                        : {level:'ok',   txt:'fuera de aire'}},
+  'stream/restart':   {delay:12000, check:s => !s.stream_active
+                        ? {level:'warn', txt:'todavía reiniciando, esperá y volvé a chequear'}
+                        : streamVerdict(s)},
+  'camera/restart':   {delay:4000,  check:s => s.camara_active
+                        ? {level:'ok',   txt:'cámara activa'}
+                        : {level:'warn', txt:'la cámara todavía no volvió'}},
+  'watchdog/enable':  {delay:2500,  check:s => wdActive(s)
+                        ? {level:'ok',   txt:'watchdog activo'}
+                        : {level:'warn', txt:'no se activó'}},
+  'watchdog/disable': {delay:2500,  check:s => !wdActive(s)
+                        ? {level:'ok',   txt:'watchdog detenido'}
+                        : {level:'warn', txt:'todavía figura activo'}},
+  'watchdog/restart': {delay:3500,  check:s => wdActive(s)
+                        ? {level:'ok',   txt:'watchdog activo'}
+                        : {level:'warn', txt:'todavía no volvió'}},
+};
+
+async function act(path, label){
   try{
     await api('POST', path);
-    toast('✅ ' + label, 'ok');
     setConn(true);
-    setTimeout(refreshStatus, 600);
-    if(path.startsWith('watchdog')) setTimeout(refreshStatus, 600);
+    const v = VERIFY[path];
+    if(v){
+      toast('⏳ ' + label + ': enviado, verificando…', 'ok', true);
+      verifyAction(path, label, v);
+    }else{
+      toast('✅ ' + label, 'ok');
+    }
+    setTimeout(refreshStatus, 800);
   }catch(e){
     toast('❌ ' + label + ': ' + e.message, 'err');
     setConn(false);
   }
 }
 
+async function verifyAction(path, label, v){
+  await sleep(v.delay);
+  try{
+    const s = await api('GET', 'status');
+    setConn(true);
+    const r = v.check(s);
+    const ico = r.level === 'ok' ? '🟢' : (r.level === 'warn' ? '🟡' : '🔴');
+    toast(ico + ' ' + label + ': ' + r.txt, r.level === 'err' ? 'err' : 'ok');
+    refreshStatus();
+  }catch(e){
+    toast('🔴 ' + label + ': no se pudo verificar (' + e.message + ')', 'err');
+    setConn(false);
+  }
+}
+
 // ── modal de confirmación ────────────────────────────────
-function confirmAct(path, title, msg){
+function openConfirm(title, msg, onOk){
   $('#modal-title').textContent = title + '?';
   $('#modal-msg').textContent = msg;
   $('#modal').classList.add('show');
-  const ok = $('#modal-ok');
-  ok.onclick = () => { closeModal(); act(path, title); };
+  $('#modal-ok').onclick = () => { closeModal(); onOk(); };
 }
+function confirmAct(path, title, msg){ openConfirm(title, msg, () => act(path, title)); }
 function closeModal(){ $('#modal').classList.remove('show'); }
 $('#modal').addEventListener('click', e => { if(e.target.id === 'modal') closeModal(); });
 document.addEventListener('keydown', e => { if(e.key === 'Escape') closeModal(); });
@@ -277,9 +364,12 @@ async function refreshStatus(){
     const s = await api('GET', 'status');
     setConn(true);
 
-    $('#st-stream').innerHTML = s.stream_active
-      ? '<span class="pill on"><span class="pill-dot"></span>AL AIRE</span>'
-      : '<span class="pill off"><span class="pill-dot"></span>FUERA DE AIRE</span>';
+    if(s.stream_active && s.stream_reconnecting)
+      $('#st-stream').innerHTML = '<span class="pill warn"><span class="pill-dot"></span>RECONECTANDO</span>';
+    else if(s.stream_active)
+      $('#st-stream').innerHTML = '<span class="pill on"><span class="pill-dot"></span>AL AIRE</span>';
+    else
+      $('#st-stream').innerHTML = '<span class="pill off"><span class="pill-dot"></span>FUERA DE AIRE</span>';
     $('#st-time').textContent   = s.stream_timecode || '—';
     $('#st-scene').textContent  = s.current_scene || '—';
     $('#st-source').textContent = s.current_source || '—';
@@ -343,41 +433,168 @@ async function toggleSource(name, enabled, row){
 }
 
 // ── captura ──────────────────────────────────────────────
-function loadShot(){
+function loadShot(path, label, altHint){
   const spin = $('#shot-spin'), wrap = $('#shot-wrap');
   spin.innerHTML = '<span class="spinner dark"></span>';
   const img = new Image();
   img.id = 'shot-img';
   img.onload = () => { wrap.innerHTML = ''; wrap.appendChild(img); spin.innerHTML = ''; setConn(true); };
-  img.onerror = () => { spin.innerHTML = ''; toast('❌ No se pudo capturar la pantalla', 'err'); setConn(false); };
-  img.src = '/obs/screenshot?t=' + Date.now();
+  img.onerror = () => {
+    spin.innerHTML = '';
+    wrap.innerHTML = '<div id="shot-empty">No se pudo capturar ' + escapeHtml(label) + '.' +
+      (altHint ? '<br>' + escapeHtml(altHint) : '') + '</div>';
+    toast('❌ No se pudo capturar ' + label, 'err');
+    setConn(false);
+  };
+  img.src = path + (path.includes('?') ? '&' : '?') + 't=' + Date.now();
 }
 
-// ── logs ─────────────────────────────────────────────────
-async function loadLogs(){
+// ── logs (reproductor: play / pause / stop) ──────────────
+// Reutiliza el snapshot GET /obs/logs re-consultándolo en intervalo mientras
+// está "reproduciendo". Solo pollea con la pestaña visible; pausar/detener corta.
+let logState = 'idle';      // 'idle' | 'playing' | 'paused'
+let logTimer = null;
+let logBusy  = false;
+const LOG_POLL_MS = 3500;
+
+async function fetchLogsOnce(){
+  if(logBusy) return;       // evitar solaparse si una consulta tarda
+  logBusy = true;
   const svc = $('#log-svc').value;
   const out = $('#log-out');
-  out.textContent = 'Cargando…';
   try{
-    const r = await api('GET', 'logs/' + svc + '?lines=80');
+    const r = await api('GET', 'logs/' + svc + '?lines=120');
     setConn(true);
+    const atBottom = out.scrollTop + out.clientHeight >= out.scrollHeight - 24;
     out.textContent = (r.logs || '(sin salida)').trim();
-    out.scrollTop = out.scrollHeight;
+    if(atBottom) out.scrollTop = out.scrollHeight;   // autoscroll si venías al pie
   }catch(e){
     setConn(false);
     out.textContent = 'Error: ' + e.message;
+  }finally{
+    logBusy = false;
   }
+}
+
+function logSetUI(){
+  const live = $('#log-live');
+  $('#log-play').disabled  = (logState === 'playing');
+  $('#log-pause').disabled = (logState !== 'playing');
+  $('#log-stop').disabled  = (logState === 'idle');
+  if(logState === 'playing'){ live.className = 'on playing'; live.innerHTML = '<span class="dot"></span>EN VIVO'; }
+  else if(logState === 'paused'){ live.className = 'on'; live.innerHTML = '<span class="dot"></span>PAUSADO'; }
+  else { live.className = ''; live.innerHTML = ''; }
+}
+
+function logStopTimer(){ if(logTimer){ clearInterval(logTimer); logTimer = null; } }
+
+async function logPlay(){
+  logState = 'playing';
+  logSetUI();
+  await fetchLogsOnce();
+  logStopTimer();
+  logTimer = setInterval(() => { if(!document.hidden) fetchLogsOnce(); }, LOG_POLL_MS);
+}
+function logPause(){
+  if(logState !== 'playing') return;
+  logState = 'paused';
+  logStopTimer();
+  logSetUI();
+}
+function logStop(){
+  logState = 'idle';
+  logStopTimer();
+  $('#log-out').textContent = 'Elegí un servicio y tocá ▶ para ver los logs en vivo.';
+  logSetUI();
+}
+
+// ── diagnóstico ──────────────────────────────────────────
+const DIAG_STYLE = {
+  error: {bg:'rgba(239,68,68,.10)',  bd:'#7f1d1d', ico:'🔴'},
+  warn:  {bg:'rgba(245,158,11,.10)', bd:'#78350f', ico:'🟡'},
+  info:  {bg:'rgba(59,130,246,.10)', bd:'#1e3a5f', ico:'ℹ️'},
+  ok:    {bg:'rgba(34,197,94,.08)',  bd:'#14532d', ico:'🟢'},
+};
+
+async function runDiag(){
+  const spin = $('#diag-spin'), body = $('#diag-body');
+  spin.innerHTML = '<span class="spinner dark"></span>';
+  body.innerHTML = '<div class="hint">Revisando la PC del canal… (tarda unos segundos)</div>';
+  try{
+    const r = await api('GET', 'diagnostico');
+    setConn(true);
+    renderDiag(r);
+  }catch(e){
+    setConn(false);
+    const s = DIAG_STYLE.error;
+    body.innerHTML =
+      '<div class="diag-item" style="border-color:' + s.bd + ';background:' + s.bg + '">' +
+        '<div class="diag-t">🔴 No se pudo conectar con la PC del canal</div>' +
+        '<div class="diag-d">' + escapeHtml(e.message) + '</div>' +
+        '<div class="diag-a">👉 La PC puede estar apagada, reiniciando o sin red. ' +
+        'Probá de nuevo en un minuto.</div>' +
+      '</div>';
+  }finally{
+    spin.innerHTML = '';
+  }
+}
+
+let _diagFindings = [];
+function renderDiag(r){
+  _diagFindings = r.findings || [];
+  const vs = DIAG_STYLE[r.verdict] || DIAG_STYLE.info;
+  let html =
+    '<div class="diag-summary" style="border-color:' + vs.bd + ';background:' + vs.bg + '">' +
+      vs.ico + ' <b>' + escapeHtml(r.resumen) + '</b> ' +
+      '<span class="diag-ts">· ' + escapeHtml(r.ts || '') + '</span>' +
+    '</div>';
+  for(let i = 0; i < _diagFindings.length; i++){
+    const it = _diagFindings[i];
+    const s = DIAG_STYLE[it.level] || DIAG_STYLE.info;
+    html +=
+      '<div class="diag-item" style="border-color:' + s.bd + ';background:' + s.bg + '">' +
+        '<div class="diag-t">' + s.ico + ' ' + escapeHtml(it.titulo) + '</div>' +
+        '<div class="diag-d">' + escapeMultiline(it.detalle) + '</div>' +
+        (it.accion ? '<div class="diag-a">👉 ' + escapeHtml(it.accion) + '</div>' : '') +
+        (it.boton ? '<button class="btn btn-' + (it.boton.kind || 'blue') +
+          '" data-diag-idx="' + i + '" style="margin-top:9px">' +
+          escapeHtml(it.boton.label) + '</button>' : '') +
+      '</div>';
+  }
+  const body = $('#diag-body');
+  body.innerHTML = html;
+  body.querySelectorAll('[data-diag-idx]').forEach(btn => {
+    btn.onclick = () => diagAct(_diagFindings[+btn.dataset.diagIdx].boton);
+  });
+}
+
+// Ejecuta la acción del banner (reusa las mismas rutas del panel) y vuelve a
+// diagnosticar para mostrar el resultado.
+function diagAct(b){
+  if(!b) return;
+  const run = async () => { await act(b.path, (b.confirm ? b.confirm.title : b.label)); setTimeout(runDiag, 2600); };
+  if(b.confirm) openConfirm(b.confirm.title, b.confirm.msg, run);
+  else run();
 }
 
 // ── util ─────────────────────────────────────────────────
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function escapeMultiline(s){ return escapeHtml(s).replace(/\n/g, '<br>'); }
 
 function refreshAll(){ refreshStatus(); refreshSources(); }
 
+// cambiar de log mientras se reproduce → refetch inmediato del nuevo servicio
+$('#log-svc').addEventListener('change', () => { if(logState === 'playing') fetchLogsOnce(); });
+
 // ── arranque + polling ───────────────────────────────────
 refreshAll();
+logSetUI();
 let timer = setInterval(() => { if(!document.hidden) refreshStatus(); }, 8000);
-document.addEventListener('visibilitychange', () => { if(!document.hidden) refreshStatus(); });
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden) return;
+  refreshStatus();
+  if(logState === 'playing') fetchLogsOnce();   // ponerse al día al volver a la pestaña
+});
 </script>
 </body>
 </html>

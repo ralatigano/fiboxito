@@ -11,6 +11,56 @@ Las fechas están en formato AAAA-MM-DD. Lo más nuevo va arriba.
 
 ---
 
+## v1.4.0 — 2026-08-03
+
+### Nuevas funcionalidades
+
+- **Botón "Diagnóstico" en el panel de OBS.**
+  El panel ya mostraba el estado y botones para operar la transmisión, pero
+  cuando algo fallaba había que interpretar registros técnicos para entender
+  qué pasaba. Ahora hay un botón **"Diagnóstico"** que revisa la PC del canal
+  y devuelve, **en castellano claro**, un resumen con semáforo: qué está bien
+  (🟢), qué conviene mirar (🟡) y qué es un problema serio (🔴), junto con
+  **qué botón tocar** en cada caso. Chequea de una sola pasada la transmisión
+  (si está realmente saliendo al aire o solo "figura" activa), si hay OBS o
+  cámara duplicados o trabados, si el vigilante (watchdog) está activo, si la
+  cámara está conectada, si alguna radio se quedó sin audio y si la PC está
+  sobrecargada o sin espacio. No cambia nada en la PC: solo mira y traduce.
+  Pensado para que cualquiera pueda entender qué pasa sin saber de consolas.
+
+- **Los hallazgos del diagnóstico traen el botón para resolverlos.**
+  Cuando el diagnóstico detecta algo que se arregla con una acción que el panel
+  ya sabe hacer (reiniciar OBS, la cámara, el watchdog o la PC), muestra ese
+  **botón dentro del mismo aviso**, para resolverlo ahí sin buscar en otra
+  parte. Al usarlo, vuelve a diagnosticar solo para mostrar el resultado.
+
+- **Confirmación real de cada botón del panel (no solo "enviado").**
+  Antes, al tocar un botón, el panel confirmaba que el comando **se había
+  mandado**, pero no si la PC del canal realmente lo había hecho. Ahora el
+  feedback es en dos pasos: primero avisa "enviado, verificando…" y unos
+  segundos después vuelve a mirar el estado real y muestra el resultado con
+  semáforo — 🟢 salió bien, 🟡 quedó a medias (por ejemplo, al aire pero
+  reconectando) o 🔴 no se pudo confirmar. Además, el estado del canal ahora
+  distingue "al aire" de "reconectando", que antes se veían igual.
+
+- **Visor de logs "en vivo" con controles de reproductor.**
+  El visor de logs del panel pasó de sacar una "foto" por clic a un modo en
+  vivo con botones ▶ / ⏸ / ⏹. Elegís qué log ver (watchdog, OBS o cámara) y
+  con ▶ se actualiza solo cada pocos segundos, mostrando un indicador
+  "● EN VIVO"; ⏸ lo congela y ⏹ lo detiene. Para no cargar de más la conexión
+  con la PC del canal, solo consulta mientras la ventana está abierta y a la
+  vista, y se frena al pausar, detener o cambiar de pestaña.
+
+- **Captura de "lo que sale al aire", más rápida y limpia.**
+  Además de la captura del escritorio de la PC (la que ya existía), el panel
+  suma una captura del **programa de OBS** —es decir, lo que realmente se está
+  transmitiendo—, que sale al instante y sin los cortes o "ventanas dobles" que
+  a veces tenía la anterior. Quedan los dos botones: **"Ver al aire"** (rápida
+  y limpia, para el día a día) y **"Ver pantalla real"** (el escritorio de la
+  PC, que sigue sirviendo aunque OBS esté trabado y no responda).
+
+---
+
 ## v1.3.0 — 2026-08-03
 
 ### Nuevas funcionalidades

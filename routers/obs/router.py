@@ -20,9 +20,22 @@ def panel(request: Request):
 
 @router.get("/screenshot")
 def screenshot():
+    """Pantalla real de la PC (ffmpeg x11grab). Sirve aunque OBS esté trabado."""
     try:
         png = service.get_screenshot()
         return Response(content=png, media_type="image/png")
+    except Exception as e:
+        _ssh_error(e)
+
+
+@router.get("/screenshot/program")
+def screenshot_program():
+    """Programa al aire (OBS WebSocket). Rápido y limpio; requiere OBS/WS vivo."""
+    try:
+        jpg = service.get_screenshot_program()
+        return Response(content=jpg, media_type="image/jpeg")
+    except ValueError as e:
+        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         _ssh_error(e)
 
@@ -31,6 +44,14 @@ def screenshot():
 def status():
     try:
         return service.get_status()
+    except Exception as e:
+        _ssh_error(e)
+
+
+@router.get("/diagnostico")
+def diagnostico():
+    try:
+        return service.run_diagnostics()
     except Exception as e:
         _ssh_error(e)
 
