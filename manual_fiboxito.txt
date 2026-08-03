@@ -342,6 +342,24 @@ genera alarma. El reinicio de la PC se detecta aparte y avisa
 una sola vez, incluso si fue rápido — útil para notar si la PC
 entrara en un ciclo de reinicios.
 
+── Guardián de placa de video (GPU) ────────────────────
+
+Fiboxito vigila el log del sistema de la PC de streaming
+buscando síntomas de un cuelgue de la placa de video (la causa
+de una caída larga que hubo). Cuando los detecta:
+
+  · Si la transmisión sigue al aire → solo avisa (⚠️), por si
+    el cuelgue se recuperó solo.
+  · Si la transmisión se cortó → reinicia la PC solo (🔧) para
+    recuperarla, y avisa.
+  · Tope anti-loop: si hicieran falta demasiados reinicios en
+    poco tiempo (falla seria), deja de reiniciar y pide
+    intervención manual (🛑).
+
+Se puede desactivar con OBS_GPU_GUARD_ENABLED=false. El tope se
+ajusta con OBS_GPU_MAX_REBOOTS (default 2) y
+OBS_GPU_REBOOT_WINDOW (default 1800 s = 30 min).
+
 El poller OBS está deshabilitado en modo DEBUG salvo que se
 configure OBS_POLLER_ENABLED=true en el .env.
 

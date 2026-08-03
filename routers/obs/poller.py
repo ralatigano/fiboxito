@@ -16,6 +16,13 @@ CAMERA_ALERT_DELAY   = int(os.getenv("OBS_CAMERA_ALERT_DELAY", "120"))
 # NO disparan este aviso, pero SÍ se detectan por el cambio de boot_id.
 UNREACHABLE_ALERT_DELAY = int(os.getenv("OBS_UNREACHABLE_ALERT_DELAY", "120"))
 
+# Guardián de GPU lockup (C): si el log del kernel muestra un cuelgue de GPU y
+# eso rompió la transmisión, reinicia la PC — pero con un tope para no entrar en
+# un loop de reinicios si la GPU está fallando de forma terminal.
+GPU_GUARD_ENABLED = os.getenv("OBS_GPU_GUARD_ENABLED", "true").lower() in ("true", "1", "yes")
+GPU_MAX_REBOOTS   = int(os.getenv("OBS_GPU_MAX_REBOOTS", "2"))
+GPU_REBOOT_WINDOW = int(os.getenv("OBS_GPU_REBOOT_WINDOW", "1800"))  # segundos (30 min)
+
 _ADMIN_IDS = [
     int(x.strip())
     for x in os.getenv("TELEGRAM_ADMIN_CHAT_ID", "").split(",")
@@ -33,6 +40,8 @@ _prev: dict = {
     "boot_id":            None,
     "unreachable_since":  None,
     "unreachable_alerted": False,
+    "gpu_lockup_active":  False,
+    "gpu_reboot_times":   [],
 }
 
 
@@ -81,6 +90,7 @@ def _poll_once():
             "camara_down_since": None if camara_active else datetime.now(),
             "camara_alerted":    False,
             "boot_id":           boot_id,
+            "gpu_lockup_active": bool(state.get("gpu_lockup")),
         })
         log_debug(
             f"[OBS POLLER] Estado inicial → "
@@ -160,6 +170,45 @@ def _poll_once():
         _prev["camara_alerted"]    = False
 
     _prev["camara_active"] = camara_active
+
+    # ── Guardián de GPU lockup (C) — híbrido con tope ────────────
+    # Si el kernel reporta un cuelgue de GPU (lo que hoy congeló OBS por horas):
+    #   · stream sano  → solo avisa (el cuelgue puede haberse recuperado solo).
+    #   · stream roto  → reinicia limpio la PC, con tope anti-loop.
+    #   · supera el tope → deja de reiniciar y pide intervención manual.
+    # Un solo aviso/acción por episodio (se rearma cuando el log deja de mostrarlo).
+    gpu_lockup = state.get("gpu_lockup")
+    if GPU_GUARD_ENABLED and gpu_lockup and not _prev["gpu_lockup_active"]:
+        _prev["gpu_lockup_active"] = True
+        now = datetime.now()
+        # descartar reinicios previos que ya salieron de la ventana
+        _prev["gpu_reboot_times"] = [
+            t for t in _prev["gpu_reboot_times"]
+            if (now - t).total_seconds() < GPU_REBOOT_WINDOW
+        ]
+        if stream_active:
+            _notify(
+                "⚠️ *GPU lockup detectado* en la PC OBS, pero la transmisión "
+                "sigue al aire. Vigilando."
+            )
+        elif len(_prev["gpu_reboot_times"]) >= GPU_MAX_REBOOTS:
+            _notify(
+                f"🛑 *GPU en falla recurrente* — ya hubo {len(_prev['gpu_reboot_times'])} "
+                f"reinicios en {GPU_REBOOT_WINDOW // 60} min y el stream sigue caído. "
+                f"NO reinicio más para evitar un loop; requiere intervención manual."
+            )
+        else:
+            _prev["gpu_reboot_times"].append(now)
+            _notify(
+                f"🔧 *GPU lockup + stream caído* — reinicio la PC OBS "
+                f"(intento {len(_prev['gpu_reboot_times'])}/{GPU_MAX_REBOOTS})."
+            )
+            try:
+                obs_service.reboot_pc()
+            except Exception as e:
+                log_error(f"[OBS POLLER] Error al reiniciar por GPU lockup: {e}")
+    elif not gpu_lockup:
+        _prev["gpu_lockup_active"] = False
 
 
 async def obs_polling_loop():

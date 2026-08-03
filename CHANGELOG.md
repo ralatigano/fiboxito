@@ -25,6 +25,16 @@ Las fechas están en formato AAAA-MM-DD. Lo más nuevo va arriba.
   una sola vez por evento. Esto da visibilidad si alguna vez la PC entrara en un
   ciclo de reinicios.
 
+- **Auto-recuperación ante fallas de la placa de video.**
+  La placa de video de la PC de streaming puede "colgarse" y dejar la
+  transmisión congelada (fue la causa de una caída larga). Ahora Fiboxito
+  **vigila los síntomas** de ese cuelgue en la PC y, si además la transmisión
+  se cortó, **reinicia la PC solo** para recuperarla, avisando por Telegram. Si
+  la transmisión sigue al aire, solo avisa (no reinicia de más). Tiene un
+  **tope de seguridad**: si hiciera falta reiniciar demasiadas veces en poco
+  tiempo (señal de una falla más seria), deja de reiniciar y pide intervención
+  manual, para no entrar en un ciclo de reinicios.
+
 ---
 
 ## v1.2.0 — 2026-07-22

@@ -275,11 +275,19 @@ def get_poll_state() -> dict:
         # boot_id: cambia en cada arranque del kernel → detecta reinicios de la PC
         boot_out, _ = ssh.run_command("cat /proc/sys/kernel/random/boot_id")
 
+        # Síntomas de cuelgue de GPU en el log del kernel (ventana reciente).
+        # obs-moldes está en el grupo 'adm' → puede leer journalctl -k sin sudo.
+        gpu_out, _ = ssh.run_command(
+            "journalctl -k --since '90 sec ago' --no-pager 2>/dev/null | "
+            "grep -Ei 'GPU lockup|ring [0-9].*stalled|couldn.t schedule ib|radeon.*Oops' | tail -3"
+        )
+
         return {
             "stream_active":  stream_active,
             "current_source": current_source,
             "camara_active":  camara_active,
             "boot_id":        boot_out.strip(),
+            "gpu_lockup":     gpu_out.strip(),
         }
 
 
