@@ -11,6 +11,10 @@ POLL_INTERVAL        = int(os.getenv("OBS_POLL_INTERVAL", "30"))
 # Tiempo mínimo que la cámara debe estar caída antes de notificar.
 # La cron de reinicio tarda ~30-60s → con 120s los reinicios programados pasan silencio.
 CAMERA_ALERT_DELAY   = int(os.getenv("OBS_CAMERA_ALERT_DELAY", "120"))
+# Tiempo mínimo que la PC OBS debe estar inalcanzable (SSH caído) antes de avisar
+# que está "caída". Un reboot normal tarda ~70s → con 120s los reinicios rápidos
+# NO disparan este aviso, pero SÍ se detectan por el cambio de boot_id.
+UNREACHABLE_ALERT_DELAY = int(os.getenv("OBS_UNREACHABLE_ALERT_DELAY", "120"))
 
 _ADMIN_IDS = [
     int(x.strip())
@@ -19,13 +23,16 @@ _ADMIN_IDS = [
 ]
 
 _prev: dict = {
-    "initialized":       False,
-    "stream_active":     None,
-    "current_source":    None,
-    "camara_active":     None,
-    "stream_was_down":   False,
-    "camara_down_since": None,
-    "camara_alerted":    False,
+    "initialized":        False,
+    "stream_active":      None,
+    "current_source":     None,
+    "camara_active":      None,
+    "stream_was_down":    False,
+    "camara_down_since":  None,
+    "camara_alerted":     False,
+    "boot_id":            None,
+    "unreachable_since":  None,
+    "unreachable_alerted": False,
 }
 
 
@@ -43,12 +50,25 @@ def _poll_once():
     try:
         state = obs_service.get_poll_state()
     except Exception as e:
+        # PC OBS inalcanzable (SSH caído): reiniciando, colgada o apagada.
+        # Avisamos UNA vez si supera el umbral, para no spamear en cada poll.
+        now = datetime.now()
+        if _prev["unreachable_since"] is None:
+            _prev["unreachable_since"] = now
+        elapsed = (now - _prev["unreachable_since"]).total_seconds()
+        if not _prev["unreachable_alerted"] and elapsed >= UNREACHABLE_ALERT_DELAY:
+            _notify(
+                f"⚠️ *PC OBS inalcanzable* hace {int(elapsed // 60)} min — "
+                f"la transmisión puede estar caída."
+            )
+            _prev["unreachable_alerted"] = True
         log_error(f"[OBS POLLER] Sin conexión SSH: {e}")
         return
 
     stream_active  = state["stream_active"]
     current_source = state["current_source"]
     camara_active  = state["camara_active"]
+    boot_id        = state.get("boot_id")
 
     # ── Primera ejecución: captura estado base, no notifica ──────
     if not _prev["initialized"]:
@@ -60,6 +80,7 @@ def _poll_once():
             "stream_was_down":   not stream_active,
             "camara_down_since": None if camara_active else datetime.now(),
             "camara_alerted":    False,
+            "boot_id":           boot_id,
         })
         log_debug(
             f"[OBS POLLER] Estado inicial → "
@@ -67,6 +88,22 @@ def _poll_once():
             f"fuente={current_source} camara={'OK' if camara_active else 'FAIL'}"
         )
         return
+
+    # ── PC OBS volvió / se reinició (SSH recuperado tras estar caído) ──
+    # boot_id cambia en cada arranque → un solo aviso por reinicio (anti-catarata).
+    rebooted = bool(_prev["boot_id"] and boot_id and boot_id != _prev["boot_id"])
+    if _prev["unreachable_since"] is not None:
+        down_min = int((datetime.now() - _prev["unreachable_since"]).total_seconds() // 60)
+        if rebooted:
+            _notify(f"🔄 *La PC OBS se reinició* — estuvo caída ~{down_min} min. Transmisión de vuelta.")
+        elif _prev["unreachable_alerted"]:
+            _notify(f"🟢 *PC OBS de vuelta* — estuvo inalcanzable ~{down_min} min.")
+        _prev["unreachable_since"]   = None
+        _prev["unreachable_alerted"] = False
+    elif rebooted:
+        # Reinicio tan rápido que ningún poll llegó a fallar, pero el boot_id cambió.
+        _notify("🔄 *La PC OBS se reinició.*")
+    _prev["boot_id"] = boot_id
 
     # ── Stream caído ─────────────────────────────────────────────
     if not stream_active and _prev["stream_active"]:

@@ -272,10 +272,14 @@ def get_poll_state() -> dict:
         cam_out, _ = ssh.run_command("pgrep -f 'title=CAMARA' > /dev/null && echo active || echo inactive")
         camara_active = cam_out.strip() == "active"
 
+        # boot_id: cambia en cada arranque del kernel → detecta reinicios de la PC
+        boot_out, _ = ssh.run_command("cat /proc/sys/kernel/random/boot_id")
+
         return {
             "stream_active":  stream_active,
             "current_source": current_source,
             "camara_active":  camara_active,
+            "boot_id":        boot_out.strip(),
         }
 
 

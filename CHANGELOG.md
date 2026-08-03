@@ -11,6 +11,22 @@ Las fechas están en formato AAAA-MM-DD. Lo más nuevo va arriba.
 
 ---
 
+## v1.3.0 — 2026-08-03
+
+### Nuevas funcionalidades
+
+- **Aviso cuando la PC de transmisión se cae o se reinicia.**
+  Hasta ahora, si la PC que hace el streaming se apagaba, reiniciaba o quedaba
+  colgada, Fiboxito **no avisaba nada** (solo detectaba problemas si podía
+  contactarla). Ahora, si la PC queda **inalcanzable** por unos minutos, manda
+  un aviso por Telegram de que la transmisión puede estar caída, y otro cuando
+  **vuelve**. Además detecta cuando la PC **se reinició** (aunque haya sido un
+  reinicio rápido) y lo informa. Está pensado para no llenar de mensajes: avisa
+  una sola vez por evento. Esto da visibilidad si alguna vez la PC entrara en un
+  ciclo de reinicios.
+
+---
+
 ## v1.2.0 — 2026-07-22
 
 ### Nuevas funcionalidades

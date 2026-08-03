@@ -322,14 +322,25 @@ reiniciando OBS o la cámara por separado.
 En producción, Fiboxito monitorea el estado del canal cada
 30 segundos y envía alertas automáticas al admin cuando:
 
-  🔴 Stream caído     → la transmisión se interrumpió
-  🟢 Stream recuperado→ el canal volvió al aire
-  🔄 Cambio de fuente → el schedule cambió la fuente activa
-  📷 Error de cámara  → mpv lleva más de 2 minutos sin correr
+  🔴 Stream caído       → la transmisión se interrumpió
+  🟢 Stream recuperado  → el canal volvió al aire
+  🔄 Cambio de fuente   → el schedule cambió la fuente activa
+  📷 Error de cámara    → mpv lleva más de 2 minutos sin correr
+  ⚠️ PC OBS inalcanzable → la PC del canal no responde hace
+                          unos minutos (apagada, colgada o
+                          reiniciando); la transmisión puede
+                          estar caída
+  🔄 PC OBS reinició    → la PC del canal se reinició y volvió
 
 El aviso de cámara tiene un delay de 2 minutos para no
 generar ruido con los reinicios programados (la cron reinicia
 mpv cada 30 minutos como parte del funcionamiento normal).
+
+El aviso de "PC OBS inalcanzable" también espera unos minutos
+(2 por defecto) antes de disparar, así un reinicio normal no
+genera alarma. El reinicio de la PC se detecta aparte y avisa
+una sola vez, incluso si fue rápido — útil para notar si la PC
+entrara en un ciclo de reinicios.
 
 El poller OBS está deshabilitado en modo DEBUG salvo que se
 configure OBS_POLLER_ENABLED=true en el .env.
@@ -408,6 +419,8 @@ negativo (ej. -1001234567890). Agregalo igual:
     OBS_POLL_INTERVAL (default: 30 segundos).
   · El delay de alerta de cámara es configurable con
     OBS_CAMERA_ALERT_DELAY (default: 120 segundos).
+  · El delay de alerta de "PC OBS inalcanzable" es configurable
+    con OBS_UNREACHABLE_ALERT_DELAY (default: 120 segundos).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  ARRANQUE AUTOMÁTICO
