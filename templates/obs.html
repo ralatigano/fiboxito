@@ -20,8 +20,9 @@
       font-size:12px;padding:5px 10px;cursor:pointer}
     #btn-refresh:hover{color:#e2e8f0;border-color:#3b82f6}
 
-    #wrap{max-width:1100px;margin:0 auto;padding:16px;display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;align-items:start}
+    #wrap{max-width:1100px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:14px}
+    .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;align-items:start}
+    .col{display:flex;flex-direction:column;gap:14px;min-width:0}
 
     .card{background:#16213e;border:1px solid #1e3a5f;border-radius:10px;padding:14px 16px}
     .card h2{font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;
@@ -154,62 +155,81 @@
       <button class="btn btn-blue btn-full" style="margin-top:12px" onclick="runDiag()">🩺 Ejecutar diagnóstico</button>
     </div>
 
-    <!-- ESTADO -->
-    <div class="card">
-      <h2>📡 Estado</h2>
-      <div class="st-row"><span class="st-label">Transmisión</span><span id="st-stream" class="st-val">—</span></div>
-      <div class="st-row"><span class="st-label">Tiempo al aire</span><span id="st-time" class="st-val">—</span></div>
-      <div class="st-row"><span class="st-label">Escena</span><span id="st-scene" class="st-val">—</span></div>
-      <div class="st-row"><span class="st-label">Fuente activa</span><span id="st-source" class="st-val">—</span></div>
-      <div class="st-row"><span class="st-label">Watchdog</span><span id="st-wd" class="st-val">—</span></div>
-    </div>
+    <div class="cols">
 
-    <!-- TRANSMISIÓN -->
-    <div class="card">
-      <h2>🎚 Transmisión</h2>
-      <div class="btn-grid">
-        <button class="btn btn-green" onclick="act('stream/start','Iniciar transmisión')">▶ Iniciar</button>
-        <button class="btn btn-red"   onclick="confirmAct('stream/stop','Detener la transmisión','El canal va a salir del aire.')">⛔ Detener</button>
-        <button class="btn btn-amber" onclick="confirmAct('stream/restart','Reiniciar OBS','Mata OBS; el watchdog lo vuelve a levantar en unos segundos.')">🔄 Reiniciar OBS</button>
-        <button class="btn btn-slate" onclick="act('camera/restart','Reiniciar cámara')">📷 Reiniciar cámara</button>
+      <!-- ── Columna 1 ── -->
+      <div class="col">
+
+        <!-- ESTADO -->
+        <div class="card">
+          <h2>📡 Estado</h2>
+          <div class="st-row"><span class="st-label">Transmisión</span><span id="st-stream" class="st-val">—</span></div>
+          <div class="st-row"><span class="st-label">Tiempo al aire</span><span id="st-time" class="st-val">—</span></div>
+          <div class="st-row"><span class="st-label">Escena</span><span id="st-scene" class="st-val">—</span></div>
+          <div class="st-row"><span class="st-label">Fuente activa</span><span id="st-source" class="st-val">—</span></div>
+          <div class="st-row"><span class="st-label">Watchdog</span><span id="st-wd" class="st-val">—</span></div>
+        </div>
+
+        <!-- CAPTURA -->
+        <div class="card">
+          <h2>🖼 Captura <span id="shot-spin"></span></h2>
+          <div id="shot-wrap"><div id="shot-empty">Tomá una captura para ver el canal.</div></div>
+          <div class="btn-grid" style="margin-top:10px">
+            <button class="btn btn-blue" onclick="loadShot('/obs/screenshot/program','lo que sale al aire','Si OBS no responde, probá «Ver pantalla real».')">📸 Ver al aire</button>
+            <button class="btn btn-ghost" onclick="loadShot('/obs/screenshot','la pantalla de la PC')">🖥 Ver pantalla real</button>
+          </div>
+          <div class="hint">«Al aire» es el programa de OBS (rápido y limpio). «Pantalla real» es el escritorio de la PC (ffmpeg) — sirve aunque OBS esté trabado. No es video en vivo.</div>
+        </div>
+
       </div>
-      <div class="hint">«Reiniciar OBS» cierra el proceso y deja que el watchdog lo relance. Usalo solo si reiniciar la cámara no alcanzó.</div>
-    </div>
 
-    <!-- FUENTES -->
-    <div class="card">
-      <h2>🎵 Fuentes de audio <span id="src-spin"></span></h2>
-      <div id="src-list"><div class="hint">Cargando fuentes…</div></div>
-      <div class="hint">El interruptor enciende/apaga la visibilidad de la fuente (el ícono del ojo en OBS).</div>
-    </div>
+      <!-- ── Columna 2 ── -->
+      <div class="col">
 
-    <!-- WATCHDOG -->
-    <div class="card">
-      <h2>🤖 Watchdog</h2>
-      <div class="st-row"><span class="st-label">Servicio</span><span id="wd-status" class="st-val">—</span></div>
-      <div class="btn-grid" style="margin-top:12px">
-        <button class="btn btn-green" onclick="act('watchdog/enable','Habilitar watchdog')">🟢 Habilitar</button>
-        <button class="btn btn-red"   onclick="confirmAct('watchdog/disable','Deshabilitar watchdog','Mientras esté apagado, nadie levanta OBS ni la cámara si se caen.')">🔴 Deshabilitar</button>
-        <button class="btn btn-slate btn-full" onclick="act('watchdog/restart','Reiniciar watchdog')">🔄 Reiniciar watchdog</button>
+        <!-- TRANSMISIÓN -->
+        <div class="card">
+          <h2>🎚 Transmisión</h2>
+          <div class="btn-grid">
+            <button class="btn btn-green" onclick="act('stream/start','Iniciar transmisión')">▶ Iniciar</button>
+            <button class="btn btn-red"   onclick="confirmAct('stream/stop','Detener la transmisión','El canal va a salir del aire.')">⛔ Detener</button>
+            <button class="btn btn-amber" onclick="confirmAct('stream/restart','Reiniciar OBS','Mata OBS; el watchdog lo vuelve a levantar en unos segundos.')">🔄 Reiniciar OBS</button>
+            <button class="btn btn-slate" onclick="act('camera/restart','Reiniciar cámara')">📷 Reiniciar cámara</button>
+          </div>
+          <div class="hint">«Reiniciar OBS» cierra el proceso y deja que el watchdog lo relance. Usalo solo si reiniciar la cámara no alcanzó.</div>
+        </div>
+
+        <!-- WATCHDOG -->
+        <div class="card">
+          <h2>🤖 Watchdog</h2>
+          <div class="st-row"><span class="st-label">Servicio</span><span id="wd-status" class="st-val">—</span></div>
+          <div class="btn-grid" style="margin-top:12px">
+            <button class="btn btn-green" onclick="act('watchdog/enable','Habilitar watchdog')">🟢 Habilitar</button>
+            <button class="btn btn-red"   onclick="confirmAct('watchdog/disable','Deshabilitar watchdog','Mientras esté apagado, nadie levanta OBS ni la cámara si se caen.')">🔴 Deshabilitar</button>
+            <button class="btn btn-slate btn-full" onclick="act('watchdog/restart','Reiniciar watchdog')">🔄 Reiniciar watchdog</button>
+          </div>
+        </div>
+
+        <!-- SISTEMA -->
+        <div class="card">
+          <h2>⚙️ Sistema</h2>
+          <button class="btn btn-red btn-full" onclick="confirmAct('system/reboot','Reiniciar la PC del canal','La PC queda unos minutos fuera de línea. Al volver, el watchdog levanta todo solo (requiere autologin configurado).')">🔁 Reiniciar la PC</button>
+          <div class="hint">Último recurso. Reinicia toda la máquina que hostea OBS.</div>
+        </div>
+
       </div>
-    </div>
 
-    <!-- CAPTURA -->
-    <div class="card">
-      <h2>🖼 Captura <span id="shot-spin"></span></h2>
-      <div id="shot-wrap"><div id="shot-empty">Tomá una captura para ver el canal.</div></div>
-      <div class="btn-grid" style="margin-top:10px">
-        <button class="btn btn-blue" onclick="loadShot('/obs/screenshot/program','lo que sale al aire','Si OBS no responde, probá «Ver pantalla real».')">📸 Ver al aire</button>
-        <button class="btn btn-ghost" onclick="loadShot('/obs/screenshot','la pantalla de la PC')">🖥 Ver pantalla real</button>
+      <!-- ── Columna 3 ── -->
+      <div class="col">
+
+        <!-- FUENTES -->
+        <div class="card">
+          <h2>🎵 Fuentes de audio <span id="src-spin"></span></h2>
+          <div id="src-list"><div class="hint">Cargando fuentes…</div></div>
+          <div class="hint">El interruptor enciende/apaga la visibilidad de la fuente (el ícono del ojo en OBS).</div>
+        </div>
+
       </div>
-      <div class="hint">«Al aire» es el programa de OBS (rápido y limpio). «Pantalla real» es el escritorio de la PC (ffmpeg) — sirve aunque OBS esté trabado. No es video en vivo.</div>
-    </div>
 
-    <!-- SISTEMA -->
-    <div class="card">
-      <h2>⚙️ Sistema</h2>
-      <button class="btn btn-red btn-full" onclick="confirmAct('system/reboot','Reiniciar la PC del canal','La PC queda unos minutos fuera de línea. Al volver, el watchdog levanta todo solo (requiere autologin configurado).')">🔁 Reiniciar la PC</button>
-      <div class="hint">Último recurso. Reinicia toda la máquina que hostea OBS.</div>
     </div>
 
     <!-- LOGS -->
