@@ -98,11 +98,15 @@ def obtener_contratos(client_id: str) -> list:
     return []
 
 
-def obtener_contratos_recientes(dias: int = 45, limite: int = 200) -> list:
+def obtener_contratos_recientes(dias: int = 365, limite: int = 999) -> list:
     """Contratos creados en los últimos `dias`, ordenados del más nuevo primero.
     Sirve para ofrecer los altas recientes al habilitar una ONT (el filtro por
-    ciudad se hace del lado del llamador con address_city/node_name)."""
-    desde = (datetime.now() - timedelta(days=dias)).strftime("%Y-%m-%d")
+    ciudad se hace del lado del llamador con address_city/node_name).
+
+    Nota: `created_at_after` exige formato DATETIME (con hora); con fecha sola la
+    API responde 400. La lista viene del más viejo primero, por eso pedimos toda
+    la ventana (per_page alto) y ordenamos del más nuevo acá."""
+    desde = (datetime.now() - timedelta(days=dias)).strftime("%Y-%m-%dT%H:%M:%S")
     data = wispro_get("contracts", {"created_at_after": desde, "per_page": limite})
     if data.get("status") != 200:
         return []

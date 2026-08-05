@@ -22,8 +22,10 @@ from clients.wispro import (
 # Caché client_id → nombre, para no re-consultar el mismo cliente.
 _nombre_cache: dict[str, str] = {}
 
-# Cuántos contratos recientes ofrecer y en qué ventana buscarlos.
-_CONTRATOS_DIAS = 45
+# Cuántos contratos recientes ofrecer y en qué ventana buscarlos. La ventana es
+# amplia (un año) porque hay ciudades con altas espaciados; igual se listan solo
+# los _CONTRATOS_MAX más recientes de la ciudad.
+_CONTRATOS_DIAS = 365
 _CONTRATOS_MAX  = 10
 
 # chat_id -> estado del flujo
