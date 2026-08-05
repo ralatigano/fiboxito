@@ -84,6 +84,40 @@ Si el servicio ya está en el estado pedido (por ejemplo, querés
 cortar algo que ya está cortado), te lo avisa y no hace nada.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ HABILITAR UNA ONT (CERRAR LA INSTALACIÓN)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Cuando el técnico termina de instalar el servicio en el
+domicilio, puede habilitar la ONT desde el chat, sin entrar a
+Wispro.
+
+Para empezar:
+  "Vamos a habilitar una ONT en Moldes"
+  "Habilitá una ONT en Cerrillos"
+  /habilitar_ont moldes
+  /habilitar_ont cerrillos
+
+Cómo sigue:
+  1. Si no indicaste la ciudad, Fiboxito la pregunta
+     (Moldes o Cerrillos).
+  2. Te pide el número de contrato.
+  3. Consulta a la OLT y te muestra la ONT nueva que ve
+     (la que todavía no está autorizada), con su serial e
+     interfaz. Si hay varias, las lista para que elijas con
+     un número; si hay una sola, la propone directo.
+     → No hace falta que copies el serial ni la interfaz:
+       Fiboxito los lee de la OLT.
+  4. Muestra un resumen y pide confirmación. Con "sí" habilita
+     la ONT; con "no" (o "cancelar") no toca nada.
+
+La ONT puede tardar unos minutos en levantar. Si la OLT no ve
+ninguna ONT nueva, verificá que esté encendida y enlazada.
+
+Nota para administradores: los UUID de las OLT se configuran una
+vez en el .env (OLT_MOLDES_ID / OLT_CERRILLOS_ID). El comando
+/olts lista las OLT del sistema con su UUID para esa carga.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  FACTURAS Y PDF
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

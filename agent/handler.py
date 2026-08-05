@@ -8,6 +8,7 @@ from clients.wispro import (
 from clients.ollama import ask_ollama
 from agent.intent import detectar_intencion, clasificar_intent_obs, extraer_termino_busqueda
 from agent import acciones
+from agent import ont_flow
 from agent.prompts import (
     prompt_saludo, prompt_cliente_no_encontrado,
     prompt_cliente_sin_termino, prompt_general,
@@ -103,6 +104,18 @@ def procesar_mensaje(chat_id: int, user_message: str, nombre_usuario: str) -> tu
             actualizar_historial(chat_id, "user", user_message)
             actualizar_historial(chat_id, "assistant", resp)
             return resp, None
+
+    # 0.b) ¿Hay una habilitación de ONT en curso, o el mensaje la dispara?
+    if ont_flow.hay_flujo(chat_id):
+        resp = ont_flow.continuar(chat_id, user_message)
+        actualizar_historial(chat_id, "user", user_message)
+        actualizar_historial(chat_id, "assistant", resp)
+        return resp, None
+    if ont_flow.es_disparador(user_message):
+        resp = ont_flow.iniciar(chat_id, user_message)
+        actualizar_historial(chat_id, "user", user_message)
+        actualizar_historial(chat_id, "assistant", resp)
+        return resp, None
 
     intencion = detectar_intencion(user_message, chat_id)
     log_debug(f"[INTENT] '{user_message}' → '{intencion}'")

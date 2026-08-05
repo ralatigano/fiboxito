@@ -13,6 +13,20 @@ Las fechas están en formato AAAA-MM-DD. Lo más nuevo va arriba.
 
 ## v1.5.0 — 2026-08-05
 
+### Habilitar una ONT al cerrar la instalación
+
+- **El técnico habilita la ONT desde Telegram, sin tocar Wispro.**
+  Cuando se termina de instalar el servicio en el domicilio, ahora se puede
+  cerrar la instalación pidiéndole a Fiboxito "vamos a habilitar una ONT en
+  Moldes" (o `/habilitar_ont moldes`). Fiboxito pregunta el número de contrato
+  y **lee de la OLT las ONT nuevas** (las que todavía no están autorizadas),
+  mostrando cuál ve para que el técnico elija —así **no** tiene que copiar a mano
+  el serial ni la interfaz—. Antes de autorizar muestra un resumen y **pide
+  confirmación**. Funciona para las OLT de Coronel Moldes y Cerrillos.
+
+- **Nuevo comando `/olts`.** Lista las OLT del sistema para la configuración
+  inicial (uso de administrador).
+
 ### Diagnóstico del canal por Telegram (automático y a pedido)
 
 - **Fiboxito revisa la salud del canal solo, cada tanto.**

@@ -7,6 +7,7 @@ from logger import log_debug, log_error, log_conversacion
 from telegram.whitelist import es_autorizado, agregar_a_whitelist
 from telegram.helpers import send_message, send_document, send_photo, analizar_foto_telegram
 from agent.handler import procesar_mensaje
+from agent import ont_flow
 from routers.obs import service as obs_service
 from routers.obs.config import OBS_SSH_HOST
 from routers.nas import telegram_ops as nas_tg
@@ -311,6 +312,24 @@ async def polling_loop():
                                 lambda: send_document(chat_id, data, fname, mime)
                             )
                         log_debug(f"[CMD] /nas → chat_id={chat_id}")
+                        continue
+
+                    # --- COMANDO /olts (descubrir UUID de OLT) ---
+                    if text.startswith("/olts"):
+                        resp_olts = await loop.run_in_executor(
+                            None, lambda: ont_flow.texto_lista_olts()
+                        )
+                        await loop.run_in_executor(None, lambda r=resp_olts: send_message(chat_id, r))
+                        log_debug(f"[CMD] /olts → chat_id={chat_id}")
+                        continue
+
+                    # --- COMANDO /habilitar_ont [ciudad] ---
+                    if text.startswith("/habilitar_ont") or text.startswith("/habilitaront"):
+                        resp_ont = await loop.run_in_executor(
+                            None, lambda t=text: ont_flow.iniciar(chat_id, t)
+                        )
+                        await loop.run_in_executor(None, lambda r=resp_ont: send_message(chat_id, r))
+                        log_debug(f"[CMD] /habilitar_ont → chat_id={chat_id}")
                         continue
 
                     # --- MENSAJE NORMAL ---

@@ -14,6 +14,12 @@ MIKROTIKS = {
     "pinares": {"id": os.getenv("MIKROTIK_PINARES_ID"), "rango": os.getenv("MIKROTIK_PINARES_RANGO", "172.18.100")},
     "sta fe":  {"id": os.getenv("MIKROTIK_STAFE_ID"),   "rango": os.getenv("MIKROTIK_STAFE_RANGO",   "172.19.102")},
 }
+# OLTs por ciudad para habilitar ONTs (UUID de Wispro). Descubrir los UUID con
+# el comando /olts y cargarlos en el .env. Vacío hasta que se configuren.
+OLTS = {
+    "moldes":    os.getenv("OLT_MOLDES_ID"),
+    "cerrillos": os.getenv("OLT_CERRILLOS_ID"),
+}
 TELEGRAM_API   = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 LOGS_DIR       = os.getenv("LOGS_DIR", "logs")
 WHITELIST_FILE = os.getenv("WHITELIST_FILE", "whitelist.json")

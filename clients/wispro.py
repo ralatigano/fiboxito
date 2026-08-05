@@ -35,6 +35,36 @@ def wispro_patch(endpoint: str, payload: dict, timeout: int = 15) -> tuple[int, 
     return res.status_code, data
 
 
+def wispro_post(endpoint: str, payload: dict, timeout: int = 60) -> tuple[int, dict]:
+    url = f"{WISPRO_URL}/api/v1/{endpoint}"
+    log_debug(f"[WISPRO] POST {url} payload={payload}")
+    res = requests.post(
+        url,
+        headers={**WISPRO_HEADERS, "Content-Type": "application/json"},
+        json=payload,
+        timeout=timeout,
+    )
+    try:
+        data = res.json()
+    except ValueError:
+        data = {}
+    log_debug(f"[WISPRO] POST http={res.status_code}")
+    return res.status_code, data
+
+
+def _como_lista(data) -> list:
+    """Normaliza respuestas Wispro que a veces vienen como lista pelada y a veces
+    envueltas en {status, meta, data}."""
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        d = data.get("data", data)
+        if isinstance(d, list):
+            return d
+        return [d] if d else []
+    return []
+
+
 def buscar_cliente(termino: str) -> dict | None:
     if termino.isdigit():
         data = wispro_get("clients", {"public_id_eq": termino})
@@ -128,3 +158,54 @@ def obtener_ips_libres(zona: str = "moldes") -> list:
     if res.status_code == 200:
         return res.json()
     return []
+
+
+# ── OLT / ONT ──────────────────────────────────────────────────
+
+def listar_olts() -> list:
+    """Lista las OLT del sistema (para descubrir sus UUID)."""
+    data = wispro_get("olts", {"per_page": 100})
+    return _como_lista(data)
+
+
+def onts_de_olt(olt_id: str, timeout: int = 60) -> list:
+    """ONTs que la OLT ve en este momento. Las recién instaladas aparecen con
+    authorized=false, junto con su serial e interface. El tiempo de respuesta
+    depende de la OLT (puede tardar)."""
+    url = f"{WISPRO_URL}/api/v1/olts/{olt_id}/onts_from_olt"
+    log_debug(f"[WISPRO] GET {url}")
+    res = requests.get(url, headers=WISPRO_HEADERS, timeout=timeout)
+    if res.status_code != 200:
+        log_error(f"[WISPRO] onts_from_olt http={res.status_code} olt={olt_id}")
+        return []
+    try:
+        return _como_lista(res.json())
+    except ValueError:
+        return []
+
+
+def autorizar_ont(olt_id: str, contract_id: str, serial: str,
+                  interface: str, timeout: int = 90) -> tuple[bool, int, dict]:
+    """Autoriza/reconfigura una ONT contra un contrato. Devuelve (ok, http, data)."""
+    payload = {
+        "olt_id":      olt_id,
+        "contract_id": contract_id,
+        "serial":      serial,
+        "interface":   interface,
+    }
+    http, data = wispro_post(
+        f"olts/{olt_id}/authorize_or_reconfigure", payload, timeout=timeout
+    )
+    ok = http in (200, 201)
+    if not ok:
+        log_error(f"[WISPRO] No se pudo autorizar ONT serial={serial} "
+                  f"iface={interface} http={http} data={data}")
+    return ok, http, data
+
+
+def estado_ont(contract_id: str, timeout: int = 30) -> dict | None:
+    """Estado de la ONT de un contrato (para verificar que quedó online)."""
+    data = wispro_get(f"contracts/{contract_id}/status_ont", timeout=timeout)
+    if isinstance(data, dict) and data.get("status") == 200:
+        return data.get("data")
+    return data if isinstance(data, dict) else None
