@@ -17,6 +17,7 @@ from routers import comprobantes as comprobantes_router
 from routers import opa_poller
 from routers.obs import router as obs_router
 from routers.obs.poller import obs_polling_loop
+from routers.obs.diag_poller import diag_polling_loop
 from routers.nas import router as nas_router
 from telegram.polling import polling_loop
 
@@ -56,6 +57,8 @@ async def lifespan(app: FastAPI):
         asyncio.create_task(opa_poller.opa_polling_loop())
     if not DEBUG or OBS_POLLER_ENABLED:
         asyncio.create_task(obs_polling_loop())
+        if os.getenv("OBS_DIAG_ENABLED", "true").lower() in ("true", "1", "yes"):
+            asyncio.create_task(diag_polling_loop())
     _notificar_arranque()
     yield
     log_debug("=== APP DETENIDA ===")

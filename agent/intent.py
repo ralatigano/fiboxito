@@ -31,6 +31,8 @@ _PALABRAS_OBS = [
     "log ", "logs",
     # screenshot
     "foto del canal", "captura", "screenshot", "pantalla del canal", "mandame una foto",
+    # diagnóstico
+    "diagnostico", "diagnóstico", "chequeo", "salud del canal",
 ]
 
 
@@ -277,6 +279,13 @@ def clasificar_intent_obs(texto: str) -> dict:
       activar_fuente | desactivar_fuente | watchdog_status
     """
     t = texto.lower().strip()
+
+    # ── Diagnóstico (chequeo de salud) ───────────────────────────
+    # Primero: no queremos que "revisá/chequeá el canal" caiga en status.
+    if any(p in t for p in ["diagnostico", "diagnóstico", "diagnostic",
+                            "chequeo", "chequeá", "chequea", "salud del canal",
+                            "está todo bien", "esta todo bien", "anda todo bien"]):
+        return {"accion": "diagnostico", "param": None}
 
     # Palabras que indican apagar/deshabilitar (se reusan para watchdog y fuentes).
     # Nota: "desactivá" contiene "activá", por eso SIEMPRE hay que chequear estas

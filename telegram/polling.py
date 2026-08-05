@@ -434,6 +434,10 @@ def _manejar_obs(text: str) -> str:
             obs_service.set_source_enabled(nombre, False)
             return f"⬜ Fuente '{nombre}' desactivada."
 
+        if subcomando in ("diagnostico", "diagnóstico", "diag", "chequeo", "salud"):
+            r = obs_service.run_diagnostics()
+            return obs_service.format_diagnostics_telegram(r)
+
         if subcomando == "logs":
             servicio = partes[2].lower() if len(partes) > 2 else "watchdog"
             logs     = obs_service.get_logs(servicio, lines=40)
@@ -442,6 +446,7 @@ def _manejar_obs(text: str) -> str:
         return (
             "Comandos /obs disponibles:\n"
             "  /obs status\n"
+            "  /obs diagnostico\n"
             "  /obs start | stop | restart\n"
             "  /obs fuentes\n"
             "  /obs activar <Nombre>\n"

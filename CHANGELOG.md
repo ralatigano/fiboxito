@@ -13,6 +13,21 @@ Las fechas están en formato AAAA-MM-DD. Lo más nuevo va arriba.
 
 ## v1.5.0 — 2026-08-05
 
+### Diagnóstico del canal por Telegram (automático y a pedido)
+
+- **Fiboxito revisa la salud del canal solo, cada tanto.**
+  Además del botón "Diagnóstico" del panel, ahora Fiboxito ejecuta ese mismo
+  chequeo **automáticamente cada cierta cantidad de horas** (arranca en 4) y
+  manda el resultado a los administradores por Telegram, con el semáforo y el
+  detalle en castellano. La idea es **medir la salud de la transmisión** a lo
+  largo del día sin que nadie tenga que acordarse de mirar. La frecuencia (y si
+  se avisa siempre o solo cuando hay algo para mirar) se ajusta desde la config.
+
+- **También se puede pedir el diagnóstico en cualquier momento.**
+  Con `/obs diagnostico` o pidiéndolo en lenguaje natural ("chequeá el canal",
+  "¿está todo bien?"), Fiboxito corre la revisión al toque y la devuelve por
+  chat.
+
 ### Fiboxito entiende mejor las frases mixtas
 
 - **Menos confusiones al interpretar un pedido.**

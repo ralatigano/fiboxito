@@ -322,6 +322,10 @@ def _procesar_obs(user_message: str) -> tuple[str, bytes | None]:
             logs     = obs.get_logs(servicio, lines=30)
             return f"📋 Logs [{servicio}]:\n\n{logs[-3000:]}", None
 
+        if accion == "diagnostico":
+            r = obs.run_diagnostics()
+            return obs.format_diagnostics_telegram(r), None
+
         if accion == "screenshot":
             img = obs.get_screenshot()
             return "📷 Canal en vivo:", img

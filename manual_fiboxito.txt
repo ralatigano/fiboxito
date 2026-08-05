@@ -200,6 +200,22 @@ lenguaje natural.
 Muestra: estado del stream · tiempo al aire · escena activa ·
 estado del watchdog · fuente de audio activa.
 
+── Diagnóstico (chequeo de salud) ──────────────────────
+
+  /obs diagnostico
+  "Hacé un diagnóstico del canal"
+  "Chequeá el canal"
+  "¿Está todo bien en el canal?"
+
+Corre el mismo chequeo que el botón "Diagnóstico" del panel y
+lo devuelve por Telegram, en castellano, con semáforo (🟢/🟡/🔴)
+e indicando qué conviene revisar. Tarda unos segundos.
+
+Además, Fiboxito ejecuta este diagnóstico SOLO y manda el
+resultado a los administradores cada cierta cantidad de horas
+(por defecto cada 4), para medir la salud del stream a lo largo
+del día. La frecuencia se configura en el .env.
+
 ── Iniciar / Detener stream ────────────────────────────
 
   /obs start              → iniciar transmisión

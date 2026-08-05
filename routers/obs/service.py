@@ -656,3 +656,29 @@ def run_diagnostics() -> dict:
         "findings": findings,
         "ts":       datetime.now().strftime("%H:%M:%S"),
     }
+
+
+_DIAG_ICON = {"error": "🔴", "warn": "🟡", "ok": "🟢", "info": "ℹ️"}
+
+
+def format_diagnostics_telegram(r: dict, include_ok: bool = False) -> str:
+    """Arma el mensaje de Telegram a partir del resultado de run_diagnostics().
+    Por defecto omite los ítems 🟢 (solo muestra lo que conviene mirar)."""
+    icon  = _DIAG_ICON.get(r.get("verdict"), "ℹ️")
+    lines = [
+        f"🩺 Diagnóstico del canal — {icon} {r.get('resumen', '')}",
+        f"🕓 Ejecutado a las {r.get('ts', '')}",
+    ]
+    shown = [f for f in r.get("findings", []) if include_ok or f.get("level") != "ok"]
+    if not shown:
+        lines.append("\n✅ Sin observaciones para reportar.")
+    else:
+        lines.append("")
+        for f in shown:
+            lines.append(f"{_DIAG_ICON.get(f.get('level'), 'ℹ️')} {f.get('titulo', '')}")
+            det = (f.get("detalle") or "").strip()
+            if det:
+                lines.append(f"   {det}")
+            if f.get("accion"):
+                lines.append(f"   👉 {f['accion']}")
+    return "\n".join(lines)
