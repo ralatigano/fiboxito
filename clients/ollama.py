@@ -31,3 +31,21 @@ def ask_ollama(prompt: str) -> str:
     result = data["response"].strip()
     log_debug(f"[OLLAMA] Respuesta:\n{result}")
     return result
+
+
+def classify_ollama(prompt: str, timeout: int = 12) -> str:
+    """Clasificación rápida (routing de intención). Temperatura 0 y salida mínima:
+    NO redacta, solo devuelve una etiqueta. Nunca lanza: ante cualquier error
+    devuelve '' para que el llamador aplique su fallback determinístico."""
+    payload = {
+        "model": MODEL,
+        "prompt": prompt,
+        "stream": False,
+        "options": {"temperature": 0, "num_predict": 8},
+    }
+    try:
+        data = requests.post(OLLAMA_URL, json=payload, timeout=timeout).json()
+        return data.get("response", "").strip()
+    except Exception as e:  # noqa: BLE001
+        log_error(f"[OLLAMA] classify falló: {e}")
+        return ""

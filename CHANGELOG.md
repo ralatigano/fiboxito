@@ -13,6 +13,20 @@ Las fechas están en formato AAAA-MM-DD. Lo más nuevo va arriba.
 
 ## v1.5.0 — 2026-08-05
 
+### Fiboxito entiende mejor las frases mixtas
+
+- **Menos confusiones al interpretar un pedido.**
+  Antes, ciertas frases se malinterpretaban por una sola palabra: por ejemplo,
+  "volvé a activar la fuente RadioFMEspacio" se tomaba como "volver atrás" en la
+  navegación de archivos y Fiboxito respondía con la lista de carpetas del
+  servidor, en vez de reactivar la fuente. Ahora Fiboxito **pesa la frase
+  completa**: si algo es claramente del canal (una fuente, la transmisión, la
+  cámara), gana eso aunque haya una palabra de navegación; y si un pedido queda
+  genuinamente ambiguo, **lo desambigua con ayuda del modelo** en vez de acumular
+  reglas fijas. Los pedidos claros siguen resolviéndose al instante, sin costo
+  extra. También se ajustó la navegación de archivos para que una orden clara del
+  canal o de un cliente **corte** la navegación en curso.
+
 ### Mejoras del panel de OBS
 
 - **Reloj de fecha y hora en el panel.**
