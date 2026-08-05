@@ -15,7 +15,16 @@ from logger import log_debug
 from config import OLTS
 from clients.wispro import (
     obtener_contrato_por_public_id, onts_de_olt, autorizar_ont,
+    obtener_contratos_recientes, buscar_cliente, obtener_contratos,
+    obtener_cliente_por_id,
 )
+
+# Caché client_id → nombre, para no re-consultar el mismo cliente.
+_nombre_cache: dict[str, str] = {}
+
+# Cuántos contratos recientes ofrecer y en qué ventana buscarlos.
+_CONTRATOS_DIAS = 45
+_CONTRATOS_MAX  = 10
 
 # chat_id -> estado del flujo
 #   {"step": "city"|"contract"|"pick"|"confirm",
@@ -37,6 +46,8 @@ _CANCELAR = {"no", "cancelá", "cancela", "cancelar", "olvidalo", "nada",
              "negativo", "salir", "basta"}
 
 _DISPARADOR_ONT = re.compile(r"\bont\b")
+# Nombre de cliente dicho en la misma frase: "...del cliente Juan Pérez".
+_RE_CLIENTE = re.compile(r"cliente\s+(.+?)\s*$")
 
 
 def es_disparador(texto: str) -> bool:
@@ -68,11 +79,95 @@ def _ciudades_disponibles() -> str:
     return " o ".join(disp) if disp else "—"
 
 
-def _pedir_contrato(chat_id, city: str) -> str:
+def _contrato_en_ciudad(c: dict, city: str) -> bool:
+    blob = f"{c.get('address_city', '')} {c.get('node_name', '')}".lower()
+    return city in blob
+
+
+def _nombre_cliente(client_id: str) -> str:
+    """Nombre del cliente de un contrato (cacheado)."""
+    cid = str(client_id or "")
+    if not cid:
+        return ""
+    if cid not in _nombre_cache:
+        cli = obtener_cliente_por_id(cid)
+        _nombre_cache[cid] = (cli or {}).get("name", "") if cli else ""
+    return _nombre_cache[cid]
+
+
+def _con_nombre(contratos: list) -> list:
+    """Anota cada contrato con el nombre del cliente (para listarlos)."""
+    for c in contratos:
+        c["_nombre"] = _nombre_cliente(c.get("client_id"))
+    return contratos
+
+
+def _fmt_contrato(c: dict) -> str:
+    partes = [f"#{c.get('public_id', '?')}"]
+    nombre = c.get("_nombre") or ""
+    if nombre:
+        partes.append(nombre)
+    extra = " · ".join(x for x in [(c.get("created_at") or "")[:10],
+                                   c.get("state", "")] if x)
+    linea = " — ".join(partes)
+    return f"{linea} ({extra})" if extra else linea
+
+
+def _mostrar_contratos(chat_id, city: str) -> str:
+    """Ofrece los contratos recientes de la ciudad para elegir por número."""
     _flujo[chat_id]["step"] = "contract"
-    return (f"Habilitación de ONT en *{city.title()}*.\n"
-            "¿Para qué número de contrato? (respondé solo el número, "
-            "o \"cancelar\" para salir)")
+    try:
+        recientes = obtener_contratos_recientes(dias=_CONTRATOS_DIAS)
+    except Exception as e:  # noqa: BLE001
+        log_debug(f"[ONT] No pude traer contratos recientes: {e}")
+        recientes = []
+    en_ciudad = _con_nombre(
+        [c for c in recientes if _contrato_en_ciudad(c, city)][:_CONTRATOS_MAX]
+    )
+    _flujo[chat_id]["contratos"] = en_ciudad
+
+    cab = f"Habilitación de ONT en *{city.title()}*."
+    if not en_ciudad:
+        return (f"{cab}\nNo encontré altas recientes en {city.title()}. "
+                "Decime el *número de contrato* o escribí el *nombre del cliente* "
+                "(o \"cancelar\").")
+    lineas = [f"{cab}\n¿Para qué contrato? Elegí con el número (#), o escribí un "
+              "nombre de cliente / otro número de contrato:"]
+    for c in en_ciudad:
+        lineas.append(f"  • {_fmt_contrato(c)}")
+    return "\n".join(lineas)
+
+
+def _elegir_contrato(chat_id, contrato: dict) -> str:
+    """Fija el contrato elegido y pasa a consultar la OLT."""
+    st = _flujo[chat_id]
+    st["contract_public"] = str(contrato.get("public_id", "?"))
+    st["contract_id"] = str(contrato.get("id", ""))
+    log_debug(f"[ONT] chat {chat_id}: contrato #{st['contract_public']} → "
+              f"{st['contract_id']}; consultando OLT {st['city']}")
+    return _buscar_onts_y_seguir(chat_id)
+
+
+def _resolver_por_nombre(chat_id, nombre: str) -> str:
+    """Busca el cliente por nombre y resuelve su contrato (o lista si tiene varios)."""
+    cli = buscar_cliente(nombre)
+    if not cli:
+        return (f"No encontré al cliente \"{nombre}\". Probá con otro nombre, "
+                "o decime el número de contrato.")
+    contratos = obtener_contratos(str(cli.get("id", "")))
+    if not contratos:
+        return f"{cli.get('name', nombre)} no tiene contratos registrados."
+    if len(contratos) == 1:
+        return _elegir_contrato(chat_id, contratos[0])
+    for c in contratos:  # ya sabemos el nombre (es el cliente buscado)
+        c["_nombre"] = cli.get("name", "")
+    _flujo[chat_id]["contratos"] = contratos
+    _flujo[chat_id]["step"] = "contract"
+    lineas = [f"{cli.get('name', nombre)} tiene {len(contratos)} contratos. "
+              "Elegí con el número (#):"]
+    for c in contratos:
+        lineas.append(f"  • {_fmt_contrato(c)}")
+    return "\n".join(lineas)
 
 
 def iniciar(chat_id, texto: str) -> str:
@@ -99,7 +194,12 @@ def iniciar(chat_id, texto: str) -> str:
 
     _flujo[chat_id]["city"] = city
     _flujo[chat_id]["olt_id"] = olt_id
-    return _pedir_contrato(chat_id, city)
+
+    # ¿Ya nombró al cliente en la misma frase? ("...del cliente Juan Pérez")
+    m = _RE_CLIENTE.search(t)
+    if m and m.group(1).strip():
+        return _resolver_por_nombre(chat_id, m.group(1).strip())
+    return _mostrar_contratos(chat_id, city)
 
 
 def _fmt_ont(o: dict) -> str:
@@ -192,21 +292,23 @@ def continuar(chat_id, texto: str) -> str:
                     f"(falta OLT_{city.upper()}_ID en el .env).")
         st["city"] = city
         st["olt_id"] = olt_id
-        return _pedir_contrato(chat_id, city)
+        return _mostrar_contratos(chat_id, city)
 
     if step == "contract":
         m = re.search(r"\d+", t)
-        if not m:
-            return "Decime el número de contrato (solo el número), o \"cancelar\"."
-        pid = m.group(0)
-        contrato = obtener_contrato_por_public_id(pid)
-        if not contrato:
-            return f"No encontré el contrato #{pid}. Probá con otro número."
-        st["contract_public"] = str(contrato.get("public_id", pid))
-        st["contract_id"] = str(contrato.get("id", ""))
-        log_debug(f"[ONT] chat {chat_id}: contrato #{pid} → {st['contract_id']}; "
-                  f"consultando OLT {st['city']}")
-        return _buscar_onts_y_seguir(chat_id)
+        if m:
+            pid = m.group(0)
+            # ¿está en la lista ofrecida? (reusa el id ya traído, sin otra llamada)
+            for c in st.get("contratos", []):
+                if str(c.get("public_id")) == pid:
+                    return _elegir_contrato(chat_id, c)
+            contrato = obtener_contrato_por_public_id(pid)
+            if not contrato:
+                return (f"No encontré el contrato #{pid}. Probá con otro número "
+                        "o escribí el nombre del cliente.")
+            return _elegir_contrato(chat_id, contrato)
+        # Texto → búsqueda por nombre de cliente.
+        return _resolver_por_nombre(chat_id, texto.strip())
 
     if step == "pick":
         onts = st.get("onts", [])

@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 import requests
 
 from config import WISPRO_URL, WISPRO_TOKEN, MIKROTIKS
@@ -75,12 +77,39 @@ def buscar_cliente(termino: str) -> dict | None:
     return None
 
 
+def obtener_cliente_por_id(client_id: str) -> dict | None:
+    """Cliente por su UUID (para resolver el nombre a partir de un contrato)."""
+    if not client_id:
+        return None
+    data = wispro_get(f"clients/{client_id}")
+    if isinstance(data, dict) and data.get("status") == 200:
+        d = data.get("data")
+        if isinstance(d, list):
+            return d[0] if d else None
+        return d
+    return None
+
+
 def obtener_contratos(client_id: str) -> list:
     data = wispro_get("contracts", {"client_id_eq": client_id})
     if data.get("status") == 200:
         d = data.get("data", [])
         return d if isinstance(d, list) else [d]
     return []
+
+
+def obtener_contratos_recientes(dias: int = 45, limite: int = 200) -> list:
+    """Contratos creados en los últimos `dias`, ordenados del más nuevo primero.
+    Sirve para ofrecer los altas recientes al habilitar una ONT (el filtro por
+    ciudad se hace del lado del llamador con address_city/node_name)."""
+    desde = (datetime.now() - timedelta(days=dias)).strftime("%Y-%m-%d")
+    data = wispro_get("contracts", {"created_at_after": desde, "per_page": limite})
+    if data.get("status") != 200:
+        return []
+    d = data.get("data", [])
+    contratos = d if isinstance(d, list) else [d]
+    contratos.sort(key=lambda c: c.get("created_at", ""), reverse=True)
+    return contratos
 
 
 def obtener_contrato_por_public_id(public_id: str) -> dict | None:

@@ -97,16 +97,25 @@ Para empezar:
   /habilitar_ont moldes
   /habilitar_ont cerrillos
 
+También podés nombrar al cliente de una:
+  "Habilitá la ONT de Moldes del cliente Juan Pérez"
+
 Cómo sigue:
   1. Si no indicaste la ciudad, Fiboxito la pregunta
      (Moldes o Cerrillos).
-  2. Te pide el número de contrato.
+  2. Te muestra los ALTAS RECIENTES de esa ciudad (nombre del
+     cliente y número de contrato) para que elijas con el
+     número. Así no tenés que tener el número a mano.
+     → Si el que buscás no está en la lista, escribí el
+       nombre del cliente y Fiboxito lo busca; o pegá el
+       número de contrato directamente.
   3. Consulta a la OLT y te muestra la ONT nueva que ve
      (la que todavía no está autorizada), con su serial e
      interfaz. Si hay varias, las lista para que elijas con
      un número; si hay una sola, la propone directo.
      → No hace falta que copies el serial ni la interfaz:
-       Fiboxito los lee de la OLT.
+       Fiboxito los lee de la OLT. Compará el serial con la
+       foto que manda el técnico.
   4. Muestra un resumen y pide confirmación. Con "sí" habilita
      la ONT; con "no" (o "cancelar") no toca nada.
 
