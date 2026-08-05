@@ -12,7 +12,10 @@
       border-bottom:1px solid #0f3460;position:sticky;top:0;z-index:100}
     #header h1{font-size:15px;font-weight:600;color:#e2e8f0}
     #header .sub{font-size:11px;color:#64748b}
-    #conn{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12px;color:#94a3b8}
+    #clock{margin-left:auto;display:flex;align-items:baseline;gap:7px;font-variant-numeric:tabular-nums}
+    #clock .clk-date{font-size:11px;color:#64748b;text-transform:capitalize}
+    #clock .clk-time{font-size:15px;font-weight:600;color:#cbd5e1;letter-spacing:.5px}
+    #conn{display:flex;align-items:center;gap:7px;font-size:12px;color:#94a3b8}
     #conn-dot{width:9px;height:9px;border-radius:50%;background:#64748b;transition:background .3s}
     #conn-dot.ok{background:#22c55e}
     #conn-dot.err{background:#ef4444}
@@ -80,8 +83,17 @@
     /* captura */
     #shot-wrap{position:relative;border-radius:8px;overflow:hidden;background:#0b1120;
       min-height:160px;display:flex;align-items:center;justify-content:center}
-    #shot-img{width:100%;display:block}
+    #shot-img{width:100%;display:block;cursor:zoom-in}
     #shot-empty{color:#475569;font-size:13px;padding:30px}
+
+    /* visor de captura a pantalla completa */
+    #lightbox{position:fixed;inset:0;background:rgba(2,6,23,.92);z-index:10001;
+      display:none;align-items:center;justify-content:center;padding:20px;cursor:zoom-out}
+    #lightbox.show{display:flex}
+    #lightbox img{max-width:100%;max-height:100%;border-radius:8px;box-shadow:0 10px 40px rgba(0,0,0,.6)}
+    #lightbox .lb-close{position:absolute;top:14px;right:18px;font-size:26px;line-height:1;
+      color:#cbd5e1;background:none;border:none;cursor:pointer;padding:4px 10px}
+    #lightbox .lb-close:hover{color:#fff}
 
     /* logs */
     .log-bar{display:flex;gap:8px;margin-bottom:10px}
@@ -140,6 +152,9 @@
   <div id="header">
     <h1>🎬 Panel OBS</h1>
     <span class="sub">Fibox · canal en vivo</span>
+    <div id="clock" title="Fecha y hora actual (de este navegador)">
+      <span class="clk-date" id="clk-date">—</span><span class="clk-time" id="clk-time">--:--:--</span>
+    </div>
     <div id="conn"><span id="conn-dot"></span><span id="conn-txt">conectando…</span></div>
     <button id="btn-refresh" onclick="refreshAll()">↻ Actualizar</button>
   </div>
@@ -177,8 +192,10 @@
           <div class="btn-grid" style="margin-top:10px">
             <button class="btn btn-blue" onclick="loadShot('/obs/screenshot/program','lo que sale al aire','Si OBS no responde, probá «Ver pantalla real».')">📸 Ver al aire</button>
             <button class="btn btn-ghost" onclick="loadShot('/obs/screenshot','la pantalla de la PC')">🖥 Ver pantalla real</button>
+            <button class="btn btn-slate" id="shot-zoom" onclick="openShot()" disabled>🔍 Ampliar</button>
+            <button class="btn btn-ghost" id="shot-clear" onclick="clearShot()" disabled>🗑 Descartar</button>
           </div>
-          <div class="hint">«Al aire» es el programa de OBS (rápido y limpio). «Pantalla real» es el escritorio de la PC (ffmpeg) — sirve aunque OBS esté trabado. No es video en vivo.</div>
+          <div class="hint">«Al aire» es el programa de OBS (rápido y limpio). «Pantalla real» es el escritorio de la PC (ffmpeg) — sirve aunque OBS esté trabado. No es video en vivo. Tocá la imagen o «Ampliar» para verla a pantalla completa.</div>
         </div>
 
       </div>
@@ -252,6 +269,11 @@
   </div>
 
   <div id="toast"></div>
+
+  <div id="lightbox">
+    <button class="lb-close" onclick="closeShot()" title="Cerrar">✕</button>
+    <img id="lightbox-img" alt="Captura ampliada">
+  </div>
 
   <div id="modal">
     <div class="modal-box">
@@ -373,7 +395,7 @@ function openConfirm(title, msg, onOk){
 function confirmAct(path, title, msg){ openConfirm(title, msg, () => act(path, title)); }
 function closeModal(){ $('#modal').classList.remove('show'); }
 $('#modal').addEventListener('click', e => { if(e.target.id === 'modal') closeModal(); });
-document.addEventListener('keydown', e => { if(e.key === 'Escape') closeModal(); });
+document.addEventListener('keydown', e => { if(e.key === 'Escape'){ closeModal(); closeShot(); } });
 
 // ── estado ───────────────────────────────────────────────
 let polling = false;
@@ -453,21 +475,49 @@ async function toggleSource(name, enabled, row){
 }
 
 // ── captura ──────────────────────────────────────────────
+let _shotSrc = null;   // src de la captura vigente (para ampliar)
+
+function _shotButtons(on){
+  $('#shot-zoom').disabled  = !on;
+  $('#shot-clear').disabled = !on;
+}
+
 function loadShot(path, label, altHint){
   const spin = $('#shot-spin'), wrap = $('#shot-wrap');
   spin.innerHTML = '<span class="spinner dark"></span>';
   const img = new Image();
   img.id = 'shot-img';
-  img.onload = () => { wrap.innerHTML = ''; wrap.appendChild(img); spin.innerHTML = ''; setConn(true); };
+  img.onload = () => {
+    wrap.innerHTML = ''; wrap.appendChild(img); spin.innerHTML = ''; setConn(true);
+    _shotSrc = img.src;
+    img.onclick = openShot;   // tocar la imagen la amplía
+    _shotButtons(true);
+  };
   img.onerror = () => {
     spin.innerHTML = '';
     wrap.innerHTML = '<div id="shot-empty">No se pudo capturar ' + escapeHtml(label) + '.' +
       (altHint ? '<br>' + escapeHtml(altHint) : '') + '</div>';
     toast('❌ No se pudo capturar ' + label, 'err');
     setConn(false);
+    _shotSrc = null;
+    _shotButtons(false);
   };
   img.src = path + (path.includes('?') ? '&' : '?') + 't=' + Date.now();
 }
+
+function clearShot(){
+  $('#shot-wrap').innerHTML = '<div id="shot-empty">Tomá una captura para ver el canal.</div>';
+  _shotSrc = null;
+  _shotButtons(false);
+}
+
+function openShot(){
+  if(!_shotSrc) return;
+  $('#lightbox-img').src = _shotSrc;
+  $('#lightbox').classList.add('show');
+}
+function closeShot(){ $('#lightbox').classList.remove('show'); }
+$('#lightbox').addEventListener('click', e => { if(e.target.id !== 'lightbox-img') closeShot(); });
 
 // ── logs (reproductor: play / pause / stop) ──────────────
 // Reutiliza el snapshot GET /obs/logs re-consultándolo en intervalo mientras
@@ -566,7 +616,7 @@ function renderDiag(r){
   let html =
     '<div class="diag-summary" style="border-color:' + vs.bd + ';background:' + vs.bg + '">' +
       vs.ico + ' <b>' + escapeHtml(r.resumen) + '</b> ' +
-      '<span class="diag-ts">· ' + escapeHtml(r.ts || '') + '</span>' +
+      (r.ts ? '<span class="diag-ts">· ejecutado a las ' + escapeHtml(r.ts) + '</span>' : '') +
     '</div>';
   for(let i = 0; i < _diagFindings.length; i++){
     const it = _diagFindings[i];
@@ -597,6 +647,16 @@ function diagAct(b){
   else run();
 }
 
+// ── reloj de fecha/hora (navegador) ──────────────────────
+// Sirve de referencia para leer los timestamps de la UI (diagnóstico, logs).
+const _DIAS  = ['dom','lun','mar','mié','jue','vie','sáb'];
+const _MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+function tickClock(){
+  const n = new Date(), p = x => String(x).padStart(2,'0');
+  $('#clk-date').textContent = `${_DIAS[n.getDay()]} ${p(n.getDate())}/${_MESES[n.getMonth()]}`;
+  $('#clk-time').textContent = `${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())}`;
+}
+
 // ── util ─────────────────────────────────────────────────
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function escapeMultiline(s){ return escapeHtml(s).replace(/\n/g, '<br>'); }
@@ -607,6 +667,8 @@ function refreshAll(){ refreshStatus(); refreshSources(); }
 $('#log-svc').addEventListener('change', () => { if(logState === 'playing') fetchLogsOnce(); });
 
 // ── arranque + polling ───────────────────────────────────
+tickClock();
+setInterval(tickClock, 1000);
 refreshAll();
 logSetUI();
 let timer = setInterval(() => { if(!document.hidden) refreshStatus(); }, 8000);

@@ -11,6 +11,26 @@ Las fechas están en formato AAAA-MM-DD. Lo más nuevo va arriba.
 
 ---
 
+## v1.5.0 — 2026-08-05
+
+### Mejoras del panel de OBS
+
+- **Reloj de fecha y hora en el panel.**
+  El encabezado ahora muestra la **fecha y hora actual**, actualizándose segundo
+  a segundo. Sirve de referencia para leer los demás datos con hora que muestra
+  la pantalla (como el momento en que se corrió el diagnóstico o los registros).
+
+- **El diagnóstico indica a qué hora se ejecutó.**
+  El resultado del diagnóstico ahora dice **"ejecutado a las HH:MM:SS"**, para
+  saber con certeza a qué momento corresponde la revisión.
+
+- **Ampliar y descartar la captura de pantalla.**
+  La captura del canal se veía muy chica. Ahora se puede **ampliar a pantalla
+  completa** (tocando la imagen o el botón "Ampliar") para apreciarla bien, y
+  **descartarla** para dejar limpia la tarjeta cuando ya no se necesita.
+
+---
+
 ## v1.4.0 — 2026-08-03
 
 ### Nuevas funcionalidades
