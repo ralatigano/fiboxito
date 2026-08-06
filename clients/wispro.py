@@ -98,20 +98,36 @@ def obtener_contratos(client_id: str) -> list:
     return []
 
 
-def obtener_contratos_recientes(dias: int = 365, limite: int = 999) -> list:
+def obtener_contratos_recientes(dias: int = 365, per_page: int = 200) -> list:
     """Contratos creados en los últimos `dias`, ordenados del más nuevo primero.
     Sirve para ofrecer los altas recientes al habilitar una ONT (el filtro por
     ciudad se hace del lado del llamador con address_city/node_name).
 
     Nota: `created_at_after` exige formato DATETIME (con hora); con fecha sola la
-    API responde 400. La lista viene del más viejo primero, por eso pedimos toda
-    la ventana (per_page alto) y ordenamos del más nuevo acá."""
+    API responde 400. La API devuelve del más viejo primero y *topea* el
+    `per_page`, así que pedir una sola página trae los altas más VIEJOS de la
+    ventana y se pierden los recientes. Por eso paginamos toda la ventana
+    (siguiendo meta.pagination.total_pages) y recién después ordenamos del más
+    nuevo acá."""
     desde = (datetime.now() - timedelta(days=dias)).strftime("%Y-%m-%dT%H:%M:%S")
-    data = wispro_get("contracts", {"created_at_after": desde, "per_page": limite})
-    if data.get("status") != 200:
+    base = {"created_at_after": desde, "per_page": per_page}
+
+    primera = wispro_get("contracts", {**base, "page": 1})
+    if primera.get("status") != 200:
         return []
-    d = data.get("data", [])
-    contratos = d if isinstance(d, list) else [d]
+
+    contratos = _como_lista(primera)
+    total_pages = int(
+        primera.get("meta", {}).get("pagination", {}).get("total_pages", 1) or 1
+    )
+    for page in range(2, total_pages + 1):
+        data = wispro_get("contracts", {**base, "page": page})
+        if data.get("status") != 200:
+            log_error(f"[WISPRO] contratos recientes: página {page}/{total_pages} "
+                      f"falló (status={data.get('status')}); sigo con lo que tengo")
+            break
+        contratos.extend(_como_lista(data))
+
     contratos.sort(key=lambda c: c.get("created_at", ""), reverse=True)
     return contratos
 

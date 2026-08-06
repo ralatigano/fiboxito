@@ -82,7 +82,19 @@ def _ciudades_disponibles() -> str:
 
 
 def _contrato_en_ciudad(c: dict, city: str) -> bool:
-    blob = f"{c.get('address_city', '')} {c.get('node_name', '')}".lower()
+    """¿El contrato pertenece a la ciudad?
+
+    El dato más confiable es el *Servidor*: la OLT que Wispro asigna sola. Si el
+    `olt_id` del contrato coincide con la OLT de la ciudad, es de esa ciudad.
+    Como respaldo —contrato sin OLT asignada aún— caemos al texto de dirección:
+    `address_state` suele traer "Coronel Moldes" aunque `address_city` diga
+    "Salta" (por eso el filtro viejo, que miraba address_city, dejaba afuera los
+    altas nuevos)."""
+    olt = OLTS.get(city)
+    if olt and c.get("olt_id") == olt:
+        return True
+    blob = " ".join(str(c.get(k) or "") for k in
+                    ("address_city", "address_state", "node_name")).lower()
     return city in blob
 
 

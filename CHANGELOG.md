@@ -11,6 +11,23 @@ Las fechas están en formato AAAA-MM-DD. Lo más nuevo va arriba.
 
 ---
 
+## v1.5.1 — 2026-08-06
+
+### La lista de contratos recientes ahora sí coincide con Wispro
+
+- **Al habilitar una ONT, los altas que ofrece Fiboxito son los mismos que se
+  ven en el panel.** Antes, la lista de "contratos recientes" de una ciudad se
+  quedaba con altas de hace semanas y **no mostraba los más nuevos** (por
+  ejemplo, un cliente dado de alta ese mismo día no aparecía y había que tipear
+  el número a mano). Se corrigieron dos cosas: Fiboxito ahora **recorre toda la
+  ventana de altas** en vez de una sola tanda, y **reconoce a qué ciudad
+  pertenece cada contrato por el servidor/OLT que tiene asignado** —un dato que
+  el sistema completa solo— en lugar de fiarse del texto de la dirección, que a
+  veces viene incompleto o cargado como "Salta". Resultado: la lista de altas
+  recientes coincide con la del panel de Wispro.
+
+---
+
 ## v1.5.0 — 2026-08-05
 
 ### Habilitar una ONT al cerrar la instalación

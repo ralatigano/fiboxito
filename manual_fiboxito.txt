@@ -105,7 +105,9 @@ Cómo sigue:
      (Moldes o Cerrillos).
   2. Te muestra los ALTAS RECIENTES de esa ciudad (nombre del
      cliente y número de contrato) para que elijas con el
-     número. Así no tenés que tener el número a mano.
+     número. Así no tenés que tener el número a mano. La lista
+     arranca por el alta más nuevo y coincide con la que ves en
+     el panel de Wispro.
      → Si el que buscás no está en la lista, escribí el
        nombre del cliente y Fiboxito lo busca; o pegá el
        número de contrato directamente.
