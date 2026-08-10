@@ -184,18 +184,23 @@ def _poll_once():
         screen_width = state.get("screen_width") or 0
         cam_mapped   = state.get("cam_window_mapped")
         video_broken = (0 < screen_width < 1920) or (cam_mapped is False)
-        if video_broken and not _prev["video_healed_active"]:
+        if video_broken:
+            # Reintenta en CADA poll mientras siga roto (heal_video es idempotente);
+            # el aviso por Telegram sale una sola vez por episodio para no spamear.
             try:
                 res = obs_service.heal_video()
-                _notify(
-                    "🩹 *Video degradado detectado* (arranque sin monitor o ventana de "
-                    "cámara sin desplegar) — recuperado solo: "
-                    + " · ".join(res.get("actions", []))
-                )
-                _prev["video_healed_active"] = True
+                # Log local siempre: si Telegram está caído, igual queda registro.
+                log_debug(f"[OBS POLLER] auto-heal de video: {res.get('actions')}")
+                if not _prev["video_healed_active"]:
+                    _notify(
+                        "🩹 *Video degradado detectado* (arranque sin monitor o ventana "
+                        "de cámara sin desplegar) — recuperando solo: "
+                        + " · ".join(res.get("actions", []))
+                    )
+                    _prev["video_healed_active"] = True
             except Exception as e:
                 log_error(f"[OBS POLLER] Error en auto-heal de video: {e}")
-        elif not video_broken:
+        else:
             _prev["video_healed_active"] = False
 
     # ── Guardián de GPU lockup (C) — híbrido con tope ────────────

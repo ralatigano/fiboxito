@@ -43,3 +43,32 @@ el encabezado del script para el detalle. Es idempotente.
 - `obs_video_check.sh` valida la conexión RTSP, que en el incidente estaba OK.
 
 `display_heal.sh` tapa esos dos huecos.
+
+## `publicidad.sh` (reemplazo)
+
+Corre por cron (`29,59 * * * *`, usuario `obs-moldes`) y mete el bloque de
+publicidad. **Ya no mata ni reinicia la cámara**: solo cambia a
+`Escena_publicidad`, reproduce el video y vuelve a `Escena`. Antes usaba la tanda
+como "refresco" de cámara (kill+restart de mpv), y eso dejaba la cámara en negro
+dos veces por hora en la PC sin monitor (ventana nueva IsUnMapped).
+
+Instalación: reemplazar `/opt/obs-watchdog/publicidad.sh` (backup del anterior).
+El cron no cambia.
+
+## `camara_refresh.sh` (nuevo, reemplaza el "refresco" de la publicidad)
+
+Refresco real de la cámara **1x/día**: reinicia mpv (limpia congelamientos
+"conectado pero frozen") y re-despliega la ventana con `display_heal`. Cubre lo
+que antes hacía el kill de la publicidad, pero sin el negro recurrente.
+
+Instalación en la PC de OBS:
+
+1. Copiar a `/opt/obs-watchdog/camara_refresh.sh` (owner `obs-moldes`, `chmod +x`).
+2. Agregar al crontab de `obs-moldes`:
+   ```cron
+   0 5 * * * /opt/obs-watchdog/camara_refresh.sh >> /opt/obs-watchdog/logs/publicidad-test.log 2>&1
+   ```
+
+> Nota: el refresco depende de que `display_heal` (windowactivate) funcione desde
+> cron. Si fallara, el poller de Fiboxito (que corre por SSH, contexto probado)
+> recupera la ventana en ≤30s igual.

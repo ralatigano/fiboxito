@@ -31,6 +31,13 @@ Las fechas están en formato AAAA-MM-DD. Lo más nuevo va arriba.
   prueba de todo sigue siendo dejar enchufado un monitor o un adaptador que lo
   simule.)
 
+- **La tanda de publicidad ya no interrumpe la cámara.** Antes, cada bloque de
+  publicidad reiniciaba la cámara por detrás (un viejo truco para destrabar
+  congelamientos); en la PC sin monitor eso dejaba la imagen en negro al volver.
+  Ahora la publicidad solo cambia de escena y vuelve, sin tocar la cámara. El
+  refresco de cámara pasó a hacerse **una vez por día** en horario de bajo
+  impacto.
+
 ---
 
 ## v1.5.1 — 2026-08-06
