@@ -211,8 +211,9 @@
             <button class="btn btn-red"   onclick="confirmAct('stream/stop','Detener la transmisión','El canal va a salir del aire.')">⛔ Detener</button>
             <button class="btn btn-amber" onclick="confirmAct('stream/restart','Reiniciar OBS','Mata OBS; el watchdog lo vuelve a levantar en unos segundos.')">🔄 Reiniciar OBS</button>
             <button class="btn btn-slate" onclick="act('camera/restart','Reiniciar cámara')">📷 Reiniciar cámara</button>
+            <button class="btn btn-blue btn-full" onclick="healVideo()">🩹 Recuperar video (pantalla negra)</button>
           </div>
-          <div class="hint">«Reiniciar OBS» cierra el proceso y deja que el watchdog lo relance. Usalo solo si reiniciar la cámara no alcanzó.</div>
+          <div class="hint">«Reiniciar OBS» cierra el proceso y deja que el watchdog lo relance. Usalo solo si reiniciar la cámara no alcanzó. «Recuperar video» sirve cuando hay audio pero la imagen sale en negro (típico si la PC arrancó sin monitor): fuerza la pantalla y re-despliega la ventana de la cámara.</div>
         </div>
 
         <!-- WATCHDOG -->
@@ -231,6 +232,8 @@
           <h2>⚙️ Sistema</h2>
           <button class="btn btn-red btn-full" onclick="confirmAct('system/reboot','Reiniciar la PC del canal','La PC queda unos minutos fuera de línea. Al volver, el watchdog levanta todo solo (requiere autologin configurado).')">🔁 Reiniciar la PC</button>
           <div class="hint">Último recurso. Reinicia toda la máquina que hostea OBS.</div>
+          <button class="btn btn-amber btn-full" style="margin-top:10px" onclick="displayFix()">🔧 Fijar display permanente</button>
+          <div class="hint">Deja la pantalla fija a 1080p en el arranque para que la PC nunca más quede sin video si bootea sin monitor. Se aplica una sola vez y toma efecto en el próximo reinicio.</div>
         </div>
 
       </div>
@@ -383,6 +386,38 @@ async function verifyAction(path, label, v){
     toast('🔴 ' + label + ': no se pudo verificar (' + e.message + ')', 'err');
     setConn(false);
   }
+}
+
+// ── recuperar video / fijar display ──────────────────────
+async function healVideo(){
+  try{
+    toast('⏳ Recuperando video…', 'ok', true);
+    const r = await api('POST', 'video/heal');
+    setConn(true);
+    toast('🟢 Recuperar video: ' + (r.actions || []).join(' · '), 'ok');
+    setTimeout(refreshStatus, 800);
+  }catch(e){
+    toast('❌ Recuperar video: ' + e.message, 'err');
+    setConn(false);
+  }
+}
+
+function displayFix(){
+  openConfirm(
+    'Fijar display permanente',
+    'Agrega un parámetro de arranque para que la PC nunca más quede sin video al bootear sin monitor. Se aplica una vez y toma efecto en el PRÓXIMO reinicio.',
+    async () => {
+      try{
+        toast('⏳ Aplicando fix de display…', 'ok', true);
+        const r = await api('POST', 'system/display_fix');
+        setConn(true);
+        toast((r.changed ? '✅ ' : 'ℹ️ ') + (r.detail || 'listo'), 'ok');
+      }catch(e){
+        toast('❌ Fijar display: ' + e.message, 'err');
+        setConn(false);
+      }
+    }
+  );
 }
 
 // ── modal de confirmación ────────────────────────────────

@@ -122,6 +122,16 @@ def restart_camera():
         _ssh_error(e)
 
 
+@router.post("/video/heal")
+def video_heal():
+    """Recupera el video tras un arranque headless: fuerza el modo de pantalla si la PC
+    quedó sin resolución real y mapea la ventana de la cámara si quedó sin desplegar."""
+    try:
+        return service.heal_video()
+    except Exception as e:
+        _ssh_error(e)
+
+
 @router.get("/logs/{service_name}")
 def get_logs(service_name: str, lines: int = 100):
     try:
@@ -170,6 +180,18 @@ def system_reboot():
     try:
         service.reboot_pc()
         return {"ok": True}
+    except Exception as e:
+        _ssh_error(e)
+
+
+@router.post("/system/display_fix")
+def system_display_fix():
+    """Fija el modo de pantalla de forma permanente en el GRUB (fix del arranque
+    headless). Toma efecto en el próximo reinicio. Requiere sudo (clave del .env)."""
+    try:
+        return service.apply_display_grub_fix()
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         _ssh_error(e)
 

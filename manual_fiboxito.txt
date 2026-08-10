@@ -289,6 +289,30 @@ automáticamente con la configuración correcta.
 Usá este comando solo si el reinicio del stream no resolvió
 el problema.
 
+── Recuperar video (imagen en negro) ───────────────────
+
+  Botón "Recuperar video" en el panel de OBS
+
+Usalo cuando la transmisión tiene AUDIO pero la IMAGEN sale
+en negro. Pasa, típicamente, cuando la PC del canal se
+reinició y arrancó sin un monitor conectado: la pantalla
+queda sin resolución real y la cámara no se muestra.
+El botón vuelve a poner la pantalla en orden y re-muestra la
+cámara, sin ir hasta la PC ni conectarle un monitor.
+
+Nota: Fiboxito también detecta y corrige esta falla solo,
+avisando por Telegram cuando la resolvió.
+
+── Fijar display permanente ─────────────────────────────
+
+  Botón "Fijar display permanente" en el panel de OBS
+
+Deja la PC del canal preparada para que NUNCA MÁS quede sin
+imagen si arranca sin monitor. Se aplica una sola vez y
+toma efecto a partir del próximo reinicio de la PC.
+(Lo más a prueba de todo sigue siendo dejar enchufado un
+monitor, o un adaptador "dummy" que simule uno.)
+
 ── Fuentes de audio ────────────────────────────────────
 
   /obs fuentes

@@ -292,6 +292,111 @@ def reboot_pc():
         ssh.run_command(OBS_REBOOT_CMD)
 
 
+# ── Recuperación de video (arranque headless / ventana sin mapear) ──────
+# Cuando la PC de OBS arranca SIN monitor, la GPU no engancha resolución (sin EDID)
+# y X queda en un framebuffer fantasma de baja resolución que no renderiza → la
+# transmisión sale en negro. Además la ventana de la cámara (mpv) puede quedar
+# IsUnMapped → OBS, que captura por XComposite, no encuentra pixmap y sale negro
+# aunque la cámara esté conectada y llegando. `heal_video` corrige las dos cosas.
+
+_X_ENV          = "XAUTHORITY=/home/obs-moldes/.Xauthority DISPLAY=:0 "
+_FORCE_MODE     = "1920x1080_60"
+_FORCE_MODELINE = "173.00 1920 2048 2248 2576 1080 1083 1088 1125 -hsync +vsync"
+_FORCE_OUTPUTS  = ("DVI-D-1", "HDMI-1", "DP-1", "DVI-I-1")
+_CAMERA_WINDOW  = "CAMARA"
+# Parámetro de kernel que fuerza una salida siempre habilitada a 1080p: con esto el
+# arranque headless ya no deja la transmisión sin video (fix permanente, ver GRUB).
+_GRUB_VIDEO_TOKEN = "video=DVI-D-1:1920x1080e"
+
+
+def _screen_width(ssh: SSHClient) -> int:
+    """Ancho actual de la pantalla X (0 si no se pudo leer)."""
+    out, _ = ssh.run_command(
+        _X_ENV + r"xrandr --query | sed -n 's/.*current \([0-9]\+\) x .*/\1/p'"
+    )
+    try:
+        return int(out.strip())
+    except ValueError:
+        return 0
+
+
+def _force_display_mode(ssh: SSHClient) -> str | None:
+    """Fuerza un modo 1080p en la primera salida que lo acepte. Reversible (se pierde
+    al reiniciar). Retorna la salida forzada, o None si ninguna aceptó."""
+    ssh.run_command(_X_ENV + f'xrandr --newmode "{_FORCE_MODE}" {_FORCE_MODELINE}')  # error si ya existe: ok
+    for out_name in _FORCE_OUTPUTS:
+        ssh.run_command(_X_ENV + f'xrandr --addmode {out_name} "{_FORCE_MODE}"')
+        ssh.run_command(_X_ENV + f'xrandr --output {out_name} --mode "{_FORCE_MODE}"')
+        if _screen_width(ssh) >= 1920:
+            return out_name
+    return None
+
+
+def _camera_window_mapped(ssh: SSHClient) -> bool | None:
+    """True si la ventana de la cámara está mapeada, False si IsUnMapped, None si no existe."""
+    wid, _ = ssh.run_command(_X_ENV + f"xdotool search --name {_CAMERA_WINDOW} | head -1")
+    wid = wid.strip()
+    if not wid:
+        return None
+    state, _ = ssh.run_command(
+        _X_ENV + f"xwininfo -id {wid} 2>/dev/null | grep -o 'Map State: [A-Za-z]*'"
+    )
+    return "IsViewable" in state
+
+
+def heal_video() -> dict:
+    """Recupera el video tras un arranque headless: fuerza un modo de pantalla si la PC
+    quedó sin resolución real, y mapea la ventana de la cámara si quedó sin desplegar.
+    Idempotente: si ya está sano, no toca nada."""
+    actions: list[str] = []
+    with _ssh() as ssh:
+        if _screen_width(ssh) < 1920:
+            forced = _force_display_mode(ssh)
+            actions.append(f"pantalla forzada a 1080p ({forced})" if forced
+                           else "no se pudo forzar el modo de pantalla")
+        mapped = _camera_window_mapped(ssh)
+        if mapped is None:
+            actions.append("la cámara no está corriendo (reiniciá la cámara)")
+        elif mapped is False:
+            wid, _ = ssh.run_command(_X_ENV + f"xdotool search --name {_CAMERA_WINDOW} | head -1")
+            ssh.run_command(_X_ENV + f"xdotool windowmap {wid.strip()}")
+            actions.append("ventana de cámara re-mapeada")
+    return {"ok": True, "actions": actions or ["ya estaba sano, nada que corregir"]}
+
+
+def _run_sudo(ssh: SSHClient, cmd: str, timeout: int = 60) -> tuple[str, str]:
+    """Corre `cmd` con sudo alimentando la contraseña por stdin (no queda en la línea de
+    comando ni en `ps`). Usa OBS_SSH_PASSWORD (la misma clave del usuario obs-moldes)."""
+    if not OBS_SSH_PASSWORD:
+        raise ValueError("OBS_SSH_PASSWORD no configurado; no se puede usar sudo")
+    stdin, stdout, stderr = ssh.client.exec_command("sudo -S -p '' " + cmd, timeout=timeout)
+    stdin.write(OBS_SSH_PASSWORD + "\n")
+    stdin.flush()
+    return stdout.read().decode().strip(), stderr.read().decode().strip()
+
+
+def apply_display_grub_fix() -> dict:
+    """Fija el modo de pantalla de forma PERMANENTE agregando un parámetro de kernel al
+    GRUB, para que la PC nunca más quede sin video al arrancar sin monitor. Idempotente.
+    Toma efecto en el próximo reinicio. Requiere sudo (usa la clave del .env)."""
+    with _ssh() as ssh:
+        cur, _ = ssh.run_command("grep '^GRUB_CMDLINE_LINUX_DEFAULT' /etc/default/grub")
+        if _GRUB_VIDEO_TOKEN in cur:
+            return {"ok": True, "changed": False,
+                    "detail": "Ya estaba aplicado; toma efecto al reiniciar.",
+                    "grub_line": cur.strip()}
+        _run_sudo(ssh, "cp -n /etc/default/grub /etc/default/grub.bak_fiboxito")
+        sed = r's/^\(GRUB_CMDLINE_LINUX_DEFAULT="[^"]*\)"/\1 ' + _GRUB_VIDEO_TOKEN + '"/'
+        _run_sudo(ssh, f"sed -i '{sed}' /etc/default/grub")
+        chk, _ = ssh.run_command("grep '^GRUB_CMDLINE_LINUX_DEFAULT' /etc/default/grub")
+        if _GRUB_VIDEO_TOKEN not in chk:
+            raise RuntimeError("No se pudo editar el GRUB (¿permisos/sudo?).")
+        _run_sudo(ssh, "update-grub", timeout=90)
+        return {"ok": True, "changed": True,
+                "detail": "Aplicado. Toma efecto en el PRÓXIMO reinicio de la PC.",
+                "grub_line": chk.strip()}
+
+
 # ── Estado para poller de notificaciones ───────────────────────
 
 def get_poll_state() -> dict:
@@ -315,12 +420,19 @@ def get_poll_state() -> dict:
             f"grep -Ei '{_GPU_LOCKUP_RE}' | tail -3"
         )
 
+        # Salud de video: ancho de pantalla (headless → cae por debajo de 1920) y
+        # si la ventana de la cámara está mapeada (IsUnMapped → OBS captura negro).
+        screen_width = _screen_width(ssh)
+        cam_mapped   = _camera_window_mapped(ssh)
+
         return {
-            "stream_active":  stream_active,
-            "current_source": current_source,
-            "camara_active":  camara_active,
-            "boot_id":        boot_out.strip(),
-            "gpu_lockup":     gpu_out.strip(),
+            "stream_active":      stream_active,
+            "current_source":     current_source,
+            "camara_active":      camara_active,
+            "boot_id":            boot_out.strip(),
+            "gpu_lockup":         gpu_out.strip(),
+            "screen_width":       screen_width,
+            "cam_window_mapped":  cam_mapped,
         }
 
 

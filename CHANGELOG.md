@@ -11,6 +11,28 @@ Las fechas están en formato AAAA-MM-DD. Lo más nuevo va arriba.
 
 ---
 
+## v1.6.0 — 2026-08-10
+
+### Recuperar el canal cuando hay audio pero la imagen sale negra
+
+- **Nuevo botón "Recuperar video" en el panel de OBS.** A veces la PC del canal
+  se reinicia y arranca sin un monitor conectado; cuando eso pasa, la
+  transmisión sigue al aire con sonido pero **la imagen sale en negro**. Ahora,
+  con un toque, Fiboxito vuelve a poner la pantalla en orden y re-muestra la
+  cámara, sin tener que ir hasta la PC ni conectarle un monitor.
+
+- **Fiboxito lo detecta y lo corrige solo.** Aunque nadie toque el botón, el
+  monitoreo del canal reconoce esta falla de "imagen en negro" y la recupera
+  automáticamente, avisando por Telegram que lo resolvió.
+
+- **Nuevo botón "Fijar display permanente".** Deja la PC del canal preparada
+  para que **nunca más** quede sin imagen si arranca sin monitor. Se aplica una
+  sola vez y queda listo a partir del próximo reinicio. (La solución más a
+  prueba de todo sigue siendo dejar enchufado un monitor o un adaptador que lo
+  simule.)
+
+---
+
 ## v1.5.1 — 2026-08-06
 
 ### La lista de contratos recientes ahora sí coincide con Wispro

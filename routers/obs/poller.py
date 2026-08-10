@@ -23,6 +23,10 @@ GPU_GUARD_ENABLED = os.getenv("OBS_GPU_GUARD_ENABLED", "true").lower() in ("true
 GPU_MAX_REBOOTS   = int(os.getenv("OBS_GPU_MAX_REBOOTS", "2"))
 GPU_REBOOT_WINDOW = int(os.getenv("OBS_GPU_REBOOT_WINDOW", "1800"))  # segundos (30 min)
 
+# Auto-recuperación de video: si la PC arrancó sin monitor (pantalla sin modo real) o
+# la ventana de la cámara quedó sin mapear, `heal_video` lo corrige sin intervención.
+VIDEO_HEAL_ENABLED = os.getenv("OBS_VIDEO_HEAL_ENABLED", "true").lower() in ("true", "1", "yes")
+
 _ADMIN_IDS = [
     int(x.strip())
     for x in os.getenv("TELEGRAM_ADMIN_CHAT_ID", "").split(",")
@@ -42,6 +46,7 @@ _prev: dict = {
     "unreachable_alerted": False,
     "gpu_lockup_active":  False,
     "gpu_reboot_times":   [],
+    "video_healed_active": False,
 }
 
 
@@ -170,6 +175,28 @@ def _poll_once():
         _prev["camara_alerted"]    = False
 
     _prev["camara_active"] = camara_active
+
+    # ── Auto-recuperación de video (arranque headless / ventana sin mapear) ──
+    # Si el stream figura al aire pero la pantalla no tiene modo real (headless) o la
+    # ventana de la cámara quedó IsUnMapped, el video sale en negro sin que se caiga el
+    # stream ni la cámara. Lo corregimos solos y avisamos una vez por episodio.
+    if VIDEO_HEAL_ENABLED and stream_active:
+        screen_width = state.get("screen_width") or 0
+        cam_mapped   = state.get("cam_window_mapped")
+        video_broken = (0 < screen_width < 1920) or (cam_mapped is False)
+        if video_broken and not _prev["video_healed_active"]:
+            try:
+                res = obs_service.heal_video()
+                _notify(
+                    "🩹 *Video degradado detectado* (arranque sin monitor o ventana de "
+                    "cámara sin desplegar) — recuperado solo: "
+                    + " · ".join(res.get("actions", []))
+                )
+                _prev["video_healed_active"] = True
+            except Exception as e:
+                log_error(f"[OBS POLLER] Error en auto-heal de video: {e}")
+        elif not video_broken:
+            _prev["video_healed_active"] = False
 
     # ── Guardián de GPU lockup (C) — híbrido con tope ────────────
     # Si el kernel reporta un cuelgue de GPU (lo que hoy congeló OBS por horas):
