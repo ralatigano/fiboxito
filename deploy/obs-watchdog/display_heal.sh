@@ -50,12 +50,15 @@ display_heal() {
         done
     fi
 
-    # 2) Ventana de la cámara: si existe pero está IsUnMapped, mapearla.
+    # 2) Ventana de la cámara: si existe pero está IsUnMapped, desplegarla.
+    #    windowmap a secas NO alcanza en esta PC (queda IsUnMapped igual);
+    #    windowactivate+windowraise sí la pasan a IsViewable.
     local wid; wid=$(xdotool search --name "$DH_CAM" 2>/dev/null | head -1)
     if [ -n "$wid" ]; then
         if xwininfo -id "$wid" 2>/dev/null | grep -q "IsUnMapped"; then
-            _dh_log "ventana $DH_CAM sin mapear (wid=$wid); mapeando..."
-            xdotool windowmap "$wid" 2>/dev/null
+            _dh_log "ventana $DH_CAM sin desplegar (wid=$wid); desplegando..."
+            xdotool windowactivate "$wid" 2>/dev/null
+            xdotool windowraise "$wid" 2>/dev/null
         fi
     fi
 }

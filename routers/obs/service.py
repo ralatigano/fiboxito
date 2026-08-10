@@ -332,16 +332,31 @@ def _force_display_mode(ssh: SSHClient) -> str | None:
     return None
 
 
-def _camera_window_mapped(ssh: SSHClient) -> bool | None:
-    """True si la ventana de la cámara está mapeada, False si IsUnMapped, None si no existe."""
+def _camera_window(ssh: SSHClient) -> str | None:
+    """ID de la ventana de la cámara (o None si no existe)."""
     wid, _ = ssh.run_command(_X_ENV + f"xdotool search --name {_CAMERA_WINDOW} | head -1")
     wid = wid.strip()
+    return wid or None
+
+
+def _camera_window_mapped(ssh: SSHClient) -> bool | None:
+    """True si la ventana de la cámara está mapeada, False si IsUnMapped, None si no existe."""
+    wid = _camera_window(ssh)
     if not wid:
         return None
     state, _ = ssh.run_command(
         _X_ENV + f"xwininfo -id {wid} 2>/dev/null | grep -o 'Map State: [A-Za-z]*'"
     )
     return "IsViewable" in state
+
+
+def _show_camera_window(ssh: SSHClient, wid: str) -> None:
+    """Despliega la ventana de la cámara. Usa windowactivate+windowraise (mueve el
+    estado vía el gestor de ventanas): `windowmap` a secas NO alcanza en esta PC —
+    la ventana queda IsUnMapped igual. Con activate/raise pasa a IsViewable y OBS
+    la vuelve a capturar por XComposite."""
+    ssh.run_command(_X_ENV + f"xdotool windowactivate {wid}")
+    ssh.run_command(_X_ENV + f"xdotool windowraise {wid}")
 
 
 def heal_video() -> dict:
@@ -354,13 +369,12 @@ def heal_video() -> dict:
             forced = _force_display_mode(ssh)
             actions.append(f"pantalla forzada a 1080p ({forced})" if forced
                            else "no se pudo forzar el modo de pantalla")
-        mapped = _camera_window_mapped(ssh)
-        if mapped is None:
+        wid = _camera_window(ssh)
+        if wid is None:
             actions.append("la cámara no está corriendo (reiniciá la cámara)")
-        elif mapped is False:
-            wid, _ = ssh.run_command(_X_ENV + f"xdotool search --name {_CAMERA_WINDOW} | head -1")
-            ssh.run_command(_X_ENV + f"xdotool windowmap {wid.strip()}")
-            actions.append("ventana de cámara re-mapeada")
+        elif not _camera_window_mapped(ssh):
+            _show_camera_window(ssh, wid)
+            actions.append("ventana de cámara re-desplegada")
     return {"ok": True, "actions": actions or ["ya estaba sano, nada que corregir"]}
 
 
