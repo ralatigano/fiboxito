@@ -124,6 +124,14 @@ Cómo sigue:
 La ONT puede tardar unos minutos en levantar. Si la OLT no ve
 ninguna ONT nueva, verificá que esté encendida y enlazada.
 
+¿La ONT que buscás no aparece en la lista? Puede estar autorizada
+en la OLT pero sin vincular a un contrato (por eso el paso normal,
+que solo muestra las NO autorizadas, no la trae). Para verla:
+  /onts moldes            → lista TODAS las ONT que ve la OLT,
+                            separando autorizadas de no autorizadas
+  /onts moldes 485754     → busca por un pedazo del serial
+Con eso confirmás si la OLT la está viendo y con qué estado.
+
 Nota para administradores: los UUID de las OLT se configuran una
 vez en el .env (OLT_MOLDES_ID / OLT_CERRILLOS_ID). El comando
 /olts lista las OLT del sistema con su UUID para esa carga.

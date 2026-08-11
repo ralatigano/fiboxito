@@ -11,6 +11,25 @@ Las fechas están en formato AAAA-MM-DD. Lo más nuevo va arriba.
 
 ---
 
+## v1.6.1 — 2026-08-11
+
+### Diagnóstico cuando una ONT no aparece al habilitarla
+
+- **Nuevo comando `/onts <ciudad>` para ver TODAS las ONT que ve la OLT.** Al
+  habilitar una instalación, a veces la ONT que se busca no figura en la lista
+  porque quedó autorizada en la OLT pero sin vincular a un contrato (un intento
+  anterior que se cortó a la mitad). El paso normal solo muestra las ONT *sin
+  autorizar*, así que esas quedaban invisibles. Ahora, con `/onts moldes` (o
+  `/onts moldes <parte del serial>`) se puede ver la lista completa, separando
+  autorizadas de no autorizadas, para confirmar si la OLT la está viendo y con
+  qué estado. Cuando el flujo no encuentra ONT nueva, Fiboxito sugiere este
+  comando.
+
+- **Más detalle en el registro interno** durante la habilitación de ONT, para
+  poder revisar después qué respondió la OLT en cada intento.
+
+---
+
 ## v1.6.0 — 2026-08-10
 
 ### Recuperar el canal cuando hay audio pero la imagen sale negra

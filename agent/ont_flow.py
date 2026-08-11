@@ -220,11 +220,13 @@ def _fmt_ont(o: dict) -> str:
     return f"interfaz {o.get('interface', '?')} · serial {o.get('serial', '?')}"
 
 
+def _sin_autorizar(o: dict) -> bool:
+    a = o.get("authorized")
+    return a in (False, "false", "False", 0, "0", None)
+
+
 def _no_autorizadas(onts: list) -> list:
-    def _sin(o):
-        a = o.get("authorized")
-        return a in (False, "false", "False", 0, "0", None)
-    return [o for o in onts if _sin(o)]
+    return [o for o in onts if _sin_autorizar(o)]
 
 
 def _buscar_onts_y_seguir(chat_id) -> str:
@@ -236,9 +238,12 @@ def _buscar_onts_y_seguir(chat_id) -> str:
     if not nuevas:
         _flujo.pop(chat_id, None)
         if onts:
-            return ("La OLT no ve ninguna ONT *nueva* (sin autorizar) en este "
+            return (f"La OLT no ve ninguna ONT *nueva* (sin autorizar) en este "
                     "momento. Verificá que la ONT esté encendida y enlazada, y "
-                    "volvé a intentar.")
+                    "volvé a intentar.\n"
+                    f"Si la ONT que buscás no aparece, puede estar autorizada pero "
+                    f"sin vincular: probá */onts {st['city']}* para ver la lista "
+                    "completa sin filtrar.")
         return ("La OLT no devolvió ONTs. Puede estar tardando o sin ONTs "
                 "conectadas. Probá de nuevo en un momento.")
 
@@ -351,6 +356,75 @@ def continuar(chat_id, texto: str) -> str:
 
     _flujo.pop(chat_id, None)
     return "Se reinició el flujo de ONT. Volvé a empezar con \"habilitar una ONT\"."
+
+
+def _fmt_ont_diag(o: dict) -> str:
+    base = (f"interfaz {o.get('interface', '?')} · serial {o.get('serial', '?')} "
+            f"· authorized={o.get('authorized')!r}")
+    extra = {k: v for k, v in o.items()
+             if k not in ("interface", "serial", "authorized",
+                          "frame", "board", "port", "number")}
+    return f"{base} · {extra}" if extra else base
+
+
+# Tope de ONTs autorizadas a mostrar por Telegram (el log tiene la lista entera).
+_DIAG_MAX_AUTORIZADAS = 60
+
+
+def texto_onts_raw(texto: str = "") -> str:
+    """DIAGNÓSTICO (comando /onts <ciudad> [serial]): vuelca TODAS las ONTs que ve
+    la OLT, sin filtrar por `authorized`. Sirve para el caso de ONT autorizada
+    pero no vinculada a contrato, que el flujo normal (solo authorized=false)
+    esconde. Con un fragmento de serial, filtra a las que lo contienen."""
+    if not _olts_configuradas():
+        return ("No hay OLTs cargadas en el .env "
+                "(OLT_MOLDES_ID / OLT_CERRILLOS_ID). Corré /olts.")
+
+    t = re.sub(r"^/onts\w*", "", texto.lower()).strip()
+    city = _detectar_ciudad(t)
+    if not city:
+        return (f"¿De qué ciudad? Uso: */onts <ciudad> [serial]* "
+                f"({_ciudades_disponibles()}).")
+    olt_id = OLTS.get(city)
+    if not olt_id:
+        return f"No tengo cargada la OLT de *{city.title()}*."
+
+    filtro = t
+    for alias in _CIUDADES:
+        filtro = filtro.replace(alias, "")
+    filtro = filtro.strip().upper()
+
+    onts = onts_de_olt(olt_id)
+    if not onts:
+        return (f"La OLT de {city.title()} no devolvió ONTs (o tardó demasiado). "
+                "Probá de nuevo en un momento.")
+
+    if filtro:
+        match = [o for o in onts
+                 if filtro in str(o.get("serial", "")).upper()]
+        if not match:
+            return (f"Ninguna de las {len(onts)} ONTs que ve la OLT de "
+                    f"*{city.title()}* tiene un serial que contenga `{filtro}`.")
+        lineas = [f"🔎 ONTs en *{city.title()}* con serial que contiene "
+                  f"`{filtro}` ({len(match)} de {len(onts)}):"]
+        lineas += [f"  • {_fmt_ont_diag(o)}" for o in match]
+        return "\n".join(lineas)
+
+    sin = [o for o in onts if _sin_autorizar(o)]
+    con = [o for o in onts if not _sin_autorizar(o)]
+    lineas = [f"🔎 ONTs que ve la OLT de *{city.title()}* (sin filtrar): "
+              f"{len(onts)} total · {len(sin)} sin autorizar · {len(con)} autorizadas."]
+    lineas.append("\n*Sin autorizar (authorized=false):*")
+    lineas += [f"  • {_fmt_ont_diag(o)}" for o in sin] or ["  (ninguna)"]
+    lineas.append("\n*Autorizadas (authorized=true):*")
+    if con:
+        lineas += [f"  • {_fmt_ont_diag(o)}" for o in con[:_DIAG_MAX_AUTORIZADAS]]
+        if len(con) > _DIAG_MAX_AUTORIZADAS:
+            lineas.append(f"  … y {len(con) - _DIAG_MAX_AUTORIZADAS} más "
+                          f"(usá */onts {city} <serial>* para buscar una puntual).")
+    else:
+        lineas.append("  (ninguna)")
+    return "\n".join(lineas)
 
 
 def texto_lista_olts() -> str:

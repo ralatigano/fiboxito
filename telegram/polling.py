@@ -323,6 +323,15 @@ async def polling_loop():
                         log_debug(f"[CMD] /olts → chat_id={chat_id}")
                         continue
 
+                    # --- COMANDO /onts [ciudad] [serial] (DIAGNÓSTICO: lista cruda sin filtrar) ---
+                    if text.startswith("/onts"):
+                        resp_onts = await loop.run_in_executor(
+                            None, lambda t=text: ont_flow.texto_onts_raw(t)
+                        )
+                        await loop.run_in_executor(None, lambda r=resp_onts: send_message(chat_id, r))
+                        log_debug(f"[CMD] /onts → chat_id={chat_id}")
+                        continue
+
                     # --- COMANDO /habilitar_ont [ciudad] ---
                     if text.startswith("/habilitar_ont") or text.startswith("/habilitaront"):
                         resp_ont = await loop.run_in_executor(

@@ -228,9 +228,23 @@ def onts_de_olt(olt_id: str, timeout: int = 60) -> list:
         log_error(f"[WISPRO] onts_from_olt http={res.status_code} olt={olt_id}")
         return []
     try:
-        return _como_lista(res.json())
+        body = res.json()
     except ValueError:
+        log_error(f"[WISPRO] onts_from_olt olt={olt_id}: respuesta no-JSON")
         return []
+    onts = _como_lista(body)
+    # DIAGNÓSTICO TEMPORAL (habilitación de ONT): volcar la respuesta cruda
+    # completa. La API no expone campo "vinculado", así que una ONT autorizada
+    # pero sin contrato vuelve con authorized=true y el flujo la esconde. Con
+    # esto vemos si la ONT esperada vino (y con qué authorized) o no vino.
+    # Quitar cuando el flujo esté estable.
+    log_debug(f"[WISPRO] onts_from_olt olt={olt_id}: {len(onts)} ONTs (crudo)")
+    for o in onts:
+        if isinstance(o, dict):
+            log_debug(f"[WISPRO]   ONT {o}")
+        else:
+            log_debug(f"[WISPRO]   ONT (no-dict): {o!r}")
+    return onts
 
 
 def autorizar_ont(olt_id: str, contract_id: str, serial: str,
