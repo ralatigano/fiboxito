@@ -10,6 +10,8 @@ de la OLT (onts_from_olt) y le muestra las ONT nuevas (authorized=false) para
 que elija. Solo hace falta el número de contrato y una confirmación.
 """
 import re
+import threading
+import time
 
 from logger import log_debug
 from config import OLTS
@@ -27,6 +29,12 @@ _nombre_cache: dict[str, str] = {}
 # los _CONTRATOS_MAX más recientes de la ciudad.
 _CONTRATOS_DIAS = 365
 _CONTRATOS_MAX  = 10
+
+# Verificación post-autorización: la OLT tarda ~40s-1min en reflejar la ONT como
+# autorizada. Confirmamos en un hilo aparte (no bloquear el bot) haciendo hasta
+# _CONF_INTENTOS re-escaneos con from_redis=false, espaciados _CONF_ESPERA_S seg.
+_CONF_INTENTOS = 3
+_CONF_ESPERA_S = 30
 
 # chat_id -> estado del flujo
 #   {"step": "city"|"contract"|"pick"|"confirm",
@@ -273,18 +281,70 @@ def _ir_a_confirmar(chat_id) -> str:
     )
 
 
+def _serial_autorizado(olt_id: str, serial: str) -> bool | None:
+    """Re-escanea la OLT (from_redis=false) y dice si `serial` figura autorizada:
+    True autorizada, False presente pero sin autorizar, None si no la encontró o
+    falló el escaneo."""
+    try:
+        onts = onts_de_olt(olt_id, from_redis=False)
+    except Exception as e:  # noqa: BLE001
+        log_debug(f"[ONT] No pude re-escanear para confirmar autorización: {e}")
+        return None
+    obj = str(serial or "").upper()
+    for o in onts:
+        if str(o.get("serial", "")).upper() == obj:
+            return not _sin_autorizar(o)
+    return None
+
+
+def _confirmar_en_segundo_plano(chat_id, olt_id, serial, city, contract_public):
+    """Corre en un hilo daemon: la OLT tarda ~1 min en reflejar la autorización,
+    así que reintenta el escaneo (from_redis=false) unas pocas veces y recién ahí
+    manda un mensaje de seguimiento por Telegram. No bloquea el loop de polling
+    (que atiende los mensajes de a uno)."""
+    from telegram.helpers import send_message  # lazy: evita ciclo de imports
+    for intento in range(1, _CONF_INTENTOS + 1):
+        time.sleep(_CONF_ESPERA_S)
+        estado = _serial_autorizado(olt_id, serial)
+        log_debug(f"[ONT] confirmación {intento}/{_CONF_INTENTOS} "
+                  f"serial={serial}: autorizado={estado!r}")
+        if estado is True:
+            send_message(
+                chat_id,
+                f"✅ Confirmado: la ONT (serial {serial or '?'}) del contrato "
+                f"#{contract_public} ya figura autorizada en la OLT. Puede tardar "
+                "unos minutos en levantar la navegación del cliente.")
+            return
+    send_message(
+        chat_id,
+        f"⏳ La ONT (serial {serial or '?'}) del contrato #{contract_public} "
+        "todavía no figura autorizada tras verificar un rato. Puede tardar un poco "
+        f"más: chequealo con */onts {city} {serial}* en un momento.")
+
+
 def _ejecutar(chat_id) -> str:
     st = _flujo.pop(chat_id)
     o = st["ont"]
+    serial = o.get("serial", "")
     ok, http, _ = autorizar_ont(
-        st["olt_id"], st["contract_id"], o.get("serial", ""), o.get("interface", "")
+        st["olt_id"], st["contract_id"], serial, o.get("interface", "")
     )
-    if ok:
-        return (f"✅ ONT habilitada para el contrato #{st['contract_public']} "
-                f"(serial {o.get('serial', '?')}). Puede tardar unos minutos en "
-                "levantar; verificá la navegación del cliente.")
-    return (f"❌ No pude habilitar la ONT (HTTP {http}). Revisá en Wispro que el "
-            "contrato y la ONT sean correctos, o intentá de nuevo.")
+    if not ok:
+        return (f"❌ No pude habilitar la ONT (HTTP {http}). Revisá en Wispro que "
+                "el contrato y la ONT sean correctos, o intentá de nuevo.")
+
+    # La OLT tarda ~1 min en reflejar la autorización: confirmamos en segundo plano
+    # (re-escaneos con from_redis=false) y avisamos por Telegram cuando quede, sin
+    # congelar el bot mientras tanto.
+    threading.Thread(
+        target=_confirmar_en_segundo_plano,
+        args=(chat_id, st["olt_id"], serial, st["city"], st["contract_public"]),
+        daemon=True,
+    ).start()
+
+    return (f"✅ Mandé la autorización de la ONT (serial {serial or '?'}) para el "
+            f"contrato #{st['contract_public']}. La OLT tarda ~1 minuto en "
+            "reflejarlo; estoy verificando y te confirmo por acá.")
 
 
 def continuar(chat_id, texto: str) -> str:

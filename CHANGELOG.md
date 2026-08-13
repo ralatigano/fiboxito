@@ -11,6 +11,28 @@ Las fechas están en formato AAAA-MM-DD. Lo más nuevo va arriba.
 
 ---
 
+## v1.6.2 — 2026-08-13
+
+### La habilitación de ONT ya ve la lista en tiempo real
+
+- **Se resolvió el problema del "listado viejo" al habilitar una ONT.** Wispro
+  entregaba la lista de ONT desde una copia guardada (caché), así que la ONT
+  recién instalada podía tardar en aparecer o directamente no figurar hasta que
+  alguien apretaba "actualizar" en el panel. Ahora Fiboxito le pide a Wispro que
+  vuelva a mirar la OLT en el momento (igual que ese botón "actualizar"), de modo
+  que la lista siempre está al día. Puede tardar unos segundos más, pero muestra
+  lo que la OLT ve de verdad.
+
+- **Confirmación automática después de habilitar.** Una vez enviada la
+  autorización, Fiboxito responde al toque ("la mandé, estoy verificando") y
+  sigue chequeando la OLT en segundo plano —porque la OLT tarda cerca de un
+  minuto en reflejar el cambio—. Cuando la ONT queda autorizada, avisa con un
+  segundo mensaje; si después de un rato todavía no figura, lo dice y sugiere
+  revisar con `/onts`. Mientras verifica, el bot sigue atendiendo normalmente al
+  resto.
+
+---
+
 ## v1.6.1 — 2026-08-11
 
 ### Diagnóstico cuando una ONT no aparece al habilitarla

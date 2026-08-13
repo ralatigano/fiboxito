@@ -217,13 +217,19 @@ def listar_olts() -> list:
     return _como_lista(data)
 
 
-def onts_de_olt(olt_id: str, timeout: int = 60) -> list:
+def onts_de_olt(olt_id: str, timeout: int = 90, from_redis: bool = False) -> list:
     """ONTs que la OLT ve en este momento. Las recién instaladas aparecen con
-    authorized=false, junto con su serial e interface. El tiempo de respuesta
-    depende de la OLT (puede tardar)."""
+    authorized=false, junto con su serial e interface.
+
+    Por defecto pide `from_redis=false`, que fuerza a Wispro a re-escanear la OLT
+    en tiempo real (SNMP/SSH según la marca) en lugar de servir el caché de Redis
+    —es lo mismo que hacen los botones "actualizar" del panel—. Sin esto la lista
+    se quedaba estática (la ONT recién instalada no aparecía). Es más lento, por
+    eso el timeout es amplio. Pasar `from_redis=True` para leer del caché."""
     url = f"{WISPRO_URL}/api/v1/olts/{olt_id}/onts_from_olt"
-    log_debug(f"[WISPRO] GET {url}")
-    res = requests.get(url, headers=WISPRO_HEADERS, timeout=timeout)
+    params = {"from_redis": "true" if from_redis else "false"}
+    log_debug(f"[WISPRO] GET {url}?from_redis={params['from_redis']}")
+    res = requests.get(url, headers=WISPRO_HEADERS, params=params, timeout=timeout)
     if res.status_code != 200:
         log_error(f"[WISPRO] onts_from_olt http={res.status_code} olt={olt_id}")
         return []

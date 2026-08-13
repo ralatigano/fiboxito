@@ -119,7 +119,18 @@ Cómo sigue:
        Fiboxito los lee de la OLT. Compará el serial con la
        foto que manda el técnico.
   4. Muestra un resumen y pide confirmación. Con "sí" habilita
-     la ONT; con "no" (o "cancelar") no toca nada.
+     la ONT; con "no" (o "cancelar") no toca nada. Al confirmar,
+     Fiboxito te responde enseguida que mandó la autorización y
+     sigue verificando la OLT por su cuenta (la OLT tarda cerca
+     de un minuto en reflejarla). Cuando queda autorizada te
+     avisa con otro mensaje; si tras un rato no aparece, te lo
+     dice y te sugiere revisar con /onts. No hace falta que
+     esperes mirando el chat: seguí con lo tuyo.
+
+Fiboxito consulta la OLT en tiempo real (no una copia guardada),
+así que la ONT recién instalada aparece sin tener que esperar ni
+apretar "actualizar" en el panel de Wispro. Esa consulta puede
+tardar unos segundos de más, pero muestra lo que la OLT ve ahora.
 
 La ONT puede tardar unos minutos en levantar. Si la OLT no ve
 ninguna ONT nueva, verificá que esté encendida y enlazada.
