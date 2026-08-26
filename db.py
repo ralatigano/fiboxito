@@ -57,6 +57,12 @@ def init_db():
             tiene_caja  INTEGER NOT NULL DEFAULT 0,
             created_at  TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS app_state (
+            key         TEXT PRIMARY KEY,
+            value       TEXT NOT NULL,
+            updated_at  TEXT NOT NULL
+        );
         """)
 
         # Estados por defecto si la tabla está vacía
@@ -99,6 +105,32 @@ def set_naps_cache(data: list):
             INSERT INTO naps_cache (id, data, updated_at) VALUES (1, ?, ?)
             ON CONFLICT(id) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at
         """, (payload, now))
+
+
+# ── Estado interno (key-value) ───────────────────────────────
+
+def get_state(key: str) -> dict | None:
+    """Lee un valor JSON del store key-value interno. None si no existe."""
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT value FROM app_state WHERE key=?", (key,)).fetchone()
+        if not row:
+            return None
+        try:
+            return json.loads(row["value"])
+        except (ValueError, TypeError):
+            return None
+
+
+def set_state(key: str, value: dict):
+    """Guarda (upsert) un valor JSON en el store key-value interno."""
+    now = datetime.utcnow().isoformat()
+    payload = json.dumps(value)
+    with get_conn() as conn:
+        conn.execute("""
+            INSERT INTO app_state (key, value, updated_at) VALUES (?, ?, ?)
+            ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at
+        """, (key, payload, now))
 
 
 # ── Estados ──────────────────────────────────────────────────

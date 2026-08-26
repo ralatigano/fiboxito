@@ -11,6 +11,25 @@ Las fechas están en formato AAAA-MM-DD. Lo más nuevo va arriba.
 
 ---
 
+## v1.6.3 — 2026-08-26
+
+### Se corrige el falso aviso de "radio sin sonido"
+
+- **El aviso de radio con error saltaba en falso.** El diagnóstico buscaba la
+  palabra "401" en el registro de OBS para detectar una radio caída, pero "401"
+  es demasiado corto y aparecía por casualidad en números internos del registro
+  (puertos y milisegundos de las propias conexiones del diagnóstico). Resultado:
+  la advertencia aparecía una y otra vez aunque **nunca hubiera un problema real**
+  de audio. Ahora la búsqueda es precisa: solo detecta errores HTTP de verdad
+  (autenticación/acceso al stream), así que el aviso deja de aparecer por ruido.
+- **Además, solo avisa por fallas *nuevas*.** Fiboxito recuerda hasta dónde había
+  mirado el registro la última vez y solo reporta lo que pasó **desde el
+  diagnóstico anterior**, para no repetir un aviso por algo viejo ya resuelto.
+  Vale tanto para el chequeo automático como para el que se pide a mano.
+- **El aviso muestra la hora exacta de la falla**, tomada del registro.
+
+---
+
 ## v1.6.2 — 2026-08-13
 
 ### La habilitación de ONT ya ve la lista en tiempo real

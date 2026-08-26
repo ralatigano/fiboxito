@@ -1,4 +1,5 @@
 import json
+import shlex
 from contextlib import contextmanager
 
 from routers.obs.config import (
@@ -506,6 +507,73 @@ def _safe(ssh: SSHClient, cmd: str, timeout: int = 15) -> str:
         return ""
 
 
+# Clave del marcador (path + offset en bytes del log de OBS) de la última corrida.
+_AUDIO_LOG_STATE_KEY = "obs_diag_audio_log"
+
+
+def _collect_audio_errors(ssh: SSHClient) -> str:
+    """Devuelve los errores HTTP de las fuentes de audio en el log de OBS DESDE la última corrida.
+
+    El patrón es PRECISO a propósito: matchea solo errores HTTP reales (Unauthorized,
+    Forbidden, "HTTP error 4xx", "Server returned 4xx", "authentication failed"). El patrón
+    viejo `401` a secas pegaba en números de puerto y milisegundos del ruido de obs-websocket
+    (p. ej. el puerto :40140 o el timestamp .401), disparando un falso positivo permanente.
+
+    Persiste un marcador (path + tamaño en bytes del log) en fibox.db. En la próxima corrida
+    solo lee los bytes agregados a partir de ese offset, de modo que un error viejo se reporta
+    una sola vez. Maneja la rotación del log: si OBS reinició (log nuevo, o el archivo encogió)
+    arranca desde el principio de esa sesión. Si la sonda falla, NO avanza el marcador.
+    """
+    import db
+
+    prev = db.get_state(_AUDIO_LOG_STATE_KEY) or {}
+    prev_path = prev.get("path", "") or ""
+    try:
+        prev_off = int(prev.get("offset", 0) or 0)
+    except (ValueError, TypeError):
+        prev_off = 0
+
+    probe = (
+        "f=$(ls -t ~/.config/obs-studio/logs/*.txt 2>/dev/null | head -1); "
+        "if [ -z \"$f\" ]; then echo NOFILE; else "
+        "sz=$(stat -c %s \"$f\" 2>/dev/null || echo 0); "
+        "pp=" + shlex.quote(prev_path) + "; po=" + str(prev_off) + "; "
+        "if [ \"$f\" = \"$pp\" ] && [ \"$sz\" -ge \"$po\" ]; then st=\"$po\"; else st=0; fi; "
+        "echo \"PATH=$f\"; echo \"SIZE=$sz\"; echo ---; "
+        "tail -c +$((st+1)) \"$f\" | "
+        "grep -iE 'unauthorized|forbidden|authentication failed|HTTP error 4|Server returned 4' | tail -5; "
+        "fi"
+    )
+    out = _safe(ssh, probe)
+
+    path, size, lines, in_body = "", None, [], False
+    for ln in out.splitlines():
+        if ln.startswith("PATH="):
+            path = ln[5:]
+        elif ln.startswith("SIZE="):
+            try:
+                size = int(ln[5:])
+            except ValueError:
+                size = None
+        elif ln == "---":
+            in_body = True
+        elif in_body:
+            lines.append(ln)
+
+    # Solo avanzamos el marcador si la sonda devolvió un log válido (path + tamaño).
+    if path and size is not None:
+        try:
+            from datetime import datetime
+            db.set_state(_AUDIO_LOG_STATE_KEY, {
+                "path": path, "offset": size, "at": datetime.now().isoformat(timespec="seconds"),
+            })
+        except Exception as e:  # noqa: BLE001
+            from logger import log_error
+            log_error(f"[DIAG] No se pudo guardar el marcador de audio: {e}")
+
+    return "\n".join(lines).strip()
+
+
 def _collect_diagnostics(ssh: SSHClient) -> dict:
     """Junta todas las señales de salud en una sola sesión SSH."""
     import time
@@ -554,12 +622,10 @@ def _collect_diagnostics(ssh: SSHClient) -> dict:
         f"grep -Ei '{_GPU_LOCKUP_RE}' | tail -3",
     )
 
-    # Audio: error de autenticación (HTTP 401) en el log de OBS → radio caída.
-    raw["audio_401"] = _safe(
-        ssh,
-        "f=$(ls -t ~/.config/obs-studio/logs/*.txt 2>/dev/null | head -1); "
-        "[ -n \"$f\" ] && grep -iE '401|authentication failed' \"$f\" | tail -2",
-    )
+    # Audio: error HTTP de una fuente de radio en el log de OBS → radio caída.
+    # Patrón preciso (no el `401` a secas, que pegaba en puertos/timestamps) y solo líneas
+    # NUEVAS desde la última corrida (marcador en fibox.db) para no re-avisar por algo viejo.
+    raw["audio_err"] = _collect_audio_errors(ssh)
 
     # Sistema: carga, núcleos y disco.
     raw["loadavg"] = _safe(ssh, "cat /proc/loadavg")
@@ -722,12 +788,13 @@ def _evaluate_diagnostics(raw: dict) -> list[dict]:
     # son lo normal; sale la fuente 'musica').
     enabled   = raw.get("enabled_sources") or []
     radios_on = [n for n in enabled if n and "radio" in n.lower()]
-    if raw.get("audio_401") and radios_on:
+    if raw.get("audio_err") and radios_on:
         f.append(_fnd(
-            "warn", "Una radio encendida falló por autenticación",
+            "warn", "Una radio encendida está fallando (error HTTP)",
             "Hay una radio encendida (" + ", ".join(radios_on) + ") y el log de OBS muestra "
-            "un error de autenticación (401): esa radio puede estar saliendo sin sonido. "
-            "No corta el video.",
+            "un error HTTP nuevo desde el último diagnóstico (autenticación o acceso al "
+            "stream): esa radio puede estar saliendo sin sonido. No corta el video.\n"
+            + _clip(raw["audio_err"]),
             "Revisá la URL o las credenciales de la radio, o apagala y usá otra fuente de audio.",
         ))
 

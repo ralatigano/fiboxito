@@ -448,6 +448,13 @@ watchdog está activo, si la cámara está conectada, si alguna
 radio quedó sin audio y si la PC está sobrecargada o sin
 espacio.
 
+El aviso de "radio sin sonido" solo salta ante un error HTTP
+real del stream (autenticación o acceso), y únicamente si es
+NUEVO desde el último diagnóstico: Fiboxito recuerda hasta dónde
+había revisado el registro de OBS, así que no repite la misma
+advertencia por algo viejo ya resuelto ni por ruido interno del
+registro. Cuando avisa, muestra la hora exacta de la falla.
+
 El diagnóstico NO cambia nada en la PC: solo mira y traduce.
 Pensado para que cualquiera entienda qué pasa sin necesidad de
 leer los registros técnicos. Cuando un problema se resuelve con
