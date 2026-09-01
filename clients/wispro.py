@@ -255,15 +255,21 @@ def onts_de_olt(olt_id: str, timeout: int = 90, from_redis: bool = False) -> lis
 
 def autorizar_ont(olt_id: str, contract_id: str, serial: str,
                   interface: str, timeout: int = 90) -> tuple[bool, int, dict]:
-    """Autoriza/reconfigura una ONT contra un contrato. Devuelve (ok, http, data)."""
+    """Autoriza/reconfigura una ONT contra un contrato. Devuelve (ok, http, data).
+
+    Endpoint correcto (confirmado por soporte Wispro): el path lleva el segmento
+    `/onts/` —`olts/{olt_id}/onts/authorize_or_reconfigure`— y el body va anidado
+    bajo `ont` (sin `olt_id`, que va solo en la URL). La doc pública tenía mal
+    ambas cosas: sin el `/onts/` la API respondía 404."""
     payload = {
-        "olt_id":      olt_id,
-        "contract_id": contract_id,
-        "serial":      serial,
-        "interface":   interface,
+        "ont": {
+            "contract_id": contract_id,
+            "serial":      serial,
+            "interface":   interface,
+        }
     }
     http, data = wispro_post(
-        f"olts/{olt_id}/authorize_or_reconfigure", payload, timeout=timeout
+        f"olts/{olt_id}/onts/authorize_or_reconfigure", payload, timeout=timeout
     )
     ok = http in (200, 201)
     if not ok:

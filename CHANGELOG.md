@@ -11,6 +11,37 @@ Las fechas están en formato AAAA-MM-DD. Lo más nuevo va arriba.
 
 ---
 
+## v1.6.5 — 2026-09-01
+
+### Se destraba la habilitación de ONT (autorización)
+
+- **Ya se puede cerrar la instalación autorizando la ONT desde Fiboxito.** El paso
+  final —autorizar la ONT contra el contrato— venía fallando y había quedado en
+  pausa esperando a soporte de Wispro. Se confirmó que **no era un problema de la
+  cuenta, sino un error en la documentación**: la dirección a la que había que
+  pedirlo estaba mal publicada. Con la dirección correcta, la autorización ya se
+  envía bien. El resto del flujo (elegir ciudad, contrato, ONT y confirmar) ya
+  venía funcionando. Queda por validar en una instalación real.
+
+---
+
+## v1.6.4 — 2026-09-01
+
+### Se corrige el audio mudo al cambiar de fuente
+
+- **Al cambiar de programa, la radio entrante podía quedar sin sonido.** Cuando el
+  canal pasaba automáticamente de la música a una radio (o entre programas), a veces
+  la radio salía **muda al aire**, y había que apagar y volver a prender esa fuente
+  a mano para que el sonido volviera. Se descubrió que la radio "creía" estar
+  sonando, pero su conexión con el stream se había cortado sin avisar; reiniciar la
+  reproducción no alcanzaba: solo apagar y prender la fuente la reconectaba de verdad.
+- **Ahora el cambio de fuente hace esa reconexión solo.** Al encender una radio, el
+  sistema repite automáticamente el "apagar y prender" que antes se hacía a mano, así
+  que la radio arranca siempre con sonido. La música, que nunca se queda muda, se
+  saltea este paso para no meter un corte innecesario al aire.
+
+---
+
 ## v1.6.3 — 2026-08-26
 
 ### Se corrige el falso aviso de "radio sin sonido"

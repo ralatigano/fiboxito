@@ -55,6 +55,39 @@ dos veces por hora en la PC sin monitor (ventana nueva IsUnMapped).
 Instalación: reemplazar `/opt/obs-watchdog/publicidad.sh` (backup del anterior).
 El cron no cambia.
 
+## `cambiar_fuente.sh` (fix de audio mudo tras el swap)
+
+Es el script que hace el **cambio de fuente** por horario: lo llama
+`schedule_runner.sh` (cron cada minuto) con `<fuente_vieja> <fuente_nueva>` cuando
+un programa empieza o termina. Antes solo apagaba la fuente vieja y encendía la
+nueva (`SetSceneItemEnabled`).
+
+**Problema:** encender (hacer visible) una fuente de red no recupera el audio si su
+conexión de red quedó muerta → la transmisión salía **muda** hasta togglearla a
+mano. Diagnóstico (probado con `GetMediaInputStatus`): la fuente reporta
+`mediaState=PLAYING` con el cursor avanzando, pero sin sonido real; el `reconnect`
+de ffmpeg reconecta el contenedor y **no** devuelve el audio. Todo el estado de
+audio (mute, volumen, monitor, tracks) es correcto e idéntico entre el estado mudo
+y el sano, así que **no** es ruteo ni mezclador. No era un problema de tiempos del
+swap (cada llamada a `obs_ws.py` ya tarda un par de segundos).
+
+**Fix:** después de encender la fuente nueva, hacerle un **toggle off→on de
+visibilidad** (lo mismo que se hacía a mano). Eso fuerza el ciclo
+activa→inactiva→activa, que es lo ÚNICO que re-negocia la conexión con audio. Un
+`TriggerMediaInputAction RESTART` **no** alcanza: reinicia la reproducción pero
+mantiene la fuente activa, sin derribar la conexión muerta.
+
+Las fuentes de la lista `STABLE_SOURCES` (por defecto `musica`) se saltean el
+toggle: son estables (no de red) y nunca quedan mudas, así que no tiene sentido
+meterles un corte al aire. Los swaps siempre son `musica ↔ programa`, o sea que en
+la práctica el toggle solo corre al entrar a una radio. Si alguna radio se agregara
+como estable por error, quedaría sin la recuperación; mantené la lista solo con
+fuentes que de verdad nunca fallan.
+
+Instalación en la PC de OBS: reemplazar `/opt/obs-watchdog/modules/cambiar_fuente.sh`
+(backup del anterior, `owner obs-moldes`, `chmod +x`). No cambia el cron ni
+`schedule_runner.sh`.
+
 ## `camara_refresh.sh` (nuevo, reemplaza el "refresco" de la publicidad)
 
 Refresco real de la cámara **1x/día**: reinicia mpv (limpia congelamientos
