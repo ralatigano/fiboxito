@@ -146,6 +146,79 @@
     .modal-box p{font-size:13px;color:#94a3b8;line-height:1.6;margin-bottom:16px}
     .modal-actions{display:flex;gap:9px;justify-content:flex-end}
     .modal-actions .btn{padding:8px 16px}
+
+    /* radios */
+    .src-main{flex:1;min-width:0}
+    .src-actions{display:flex;align-items:center;gap:5px;flex-shrink:0}
+    .src-sub{font-size:10px;color:#475569;margin-top:2px;word-break:break-all;line-height:1.35}
+    .icon-btn{background:none;border:none;color:#64748b;font-size:13px;cursor:pointer;
+      padding:4px 5px;border-radius:5px;line-height:1}
+    .icon-btn:hover{color:#e2e8f0;background:#0f1f3d}
+    .badge{font-size:9px;font-weight:600;padding:2px 6px;border-radius:999px;background:#0f1f3d;
+      border:1px solid #1e3a5f;color:#94a3b8;white-space:nowrap;text-transform:uppercase;letter-spacing:.4px}
+    .badge.def{color:#7dd3fc;border-color:#0c4a6e}
+    .dot-src{font-size:9px;line-height:1}
+    details.more{margin-top:12px;border-top:1px solid #1e3a5f;padding-top:8px}
+    details.more>summary{font-size:11px;color:#64748b;cursor:pointer;padding:4px 0;list-style:none}
+    details.more>summary::-webkit-details-marker{display:none}
+    details.more>summary:hover{color:#94a3b8}
+    details.more[open]>summary{color:#94a3b8}
+    .h2-act{margin-left:auto;font-size:11px;padding:5px 10px;text-transform:none;letter-spacing:0}
+
+    /* agenda semanal */
+    #ag-wrap{overflow-x:auto;padding-bottom:6px}
+    .ag{--ag-h:672px;display:grid;grid-template-columns:44px repeat(7,minmax(72px,1fr));min-width:560px}
+    .ag-head{font-size:11px;font-weight:600;color:#94a3b8;text-align:center;padding:4px 0 6px;
+      border-bottom:1px solid #1e3a5f}
+    .ag-head.today{color:#60a5fa}
+    .ag-gutter{position:relative;height:var(--ag-h)}
+    .ag-gutter span{position:absolute;right:6px;transform:translateY(-50%);font-size:10px;
+      color:#475569;font-variant-numeric:tabular-nums}
+    .ag-col{position:relative;height:var(--ag-h);border-left:1px solid #1e3a5f;
+      background:repeating-linear-gradient(to bottom,transparent 0,
+        transparent calc(var(--ag-h)/24 - 1px),
+        rgba(30,58,95,.5) calc(var(--ag-h)/24 - 1px),
+        rgba(30,58,95,.5) calc(var(--ag-h)/24))}
+    .ag-col:last-child{border-right:1px solid #1e3a5f}
+    .ag-blk{position:absolute;left:2px;right:2px;border-radius:4px;padding:1px 4px;overflow:hidden;
+      cursor:pointer;font-size:10px;line-height:1.3;border-left:3px solid;min-height:12px}
+    .ag-blk:hover{filter:brightness(1.4)}
+    .ag-blk b{display:block;font-weight:600;color:#f1f5f9;white-space:nowrap;
+      overflow:hidden;text-overflow:ellipsis}
+    .ag-blk i{font-style:normal;color:#cbd5e1;opacity:.85;font-variant-numeric:tabular-nums}
+    .ag-now{position:absolute;left:0;right:0;border-top:2px solid #ef4444;z-index:3;pointer-events:none}
+    .ag-now:before{content:"";position:absolute;left:-3px;top:-4px;width:6px;height:6px;
+      border-radius:50%;background:#ef4444}
+
+    /* formularios (radio / programa) */
+    .fmodal{position:fixed;inset:0;background:rgba(2,6,23,.7);z-index:10000;display:none;
+      align-items:center;justify-content:center;padding:16px;backdrop-filter:blur(2px);overflow:auto}
+    .fmodal.show{display:flex}
+    .fbox{background:#16213e;border:1px solid #334155;border-radius:12px;padding:20px;
+      max-width:440px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.6);margin:auto}
+    .fbox h3{font-size:15px;color:#f1f5f9;margin-bottom:14px}
+    .fld{margin-bottom:12px}
+    .fld label{display:block;font-size:10px;color:#94a3b8;margin-bottom:5px;
+      text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+    .fld input,.fld select{width:100%;background:#0f1f3d;border:1px solid #1e3a5f;border-radius:6px;
+      color:#e2e8f0;font-size:13px;padding:8px 9px;outline:none;font-family:inherit}
+    .fld input:focus,.fld select:focus{border-color:#3b82f6}
+    .fld .sub{font-size:11px;color:#64748b;margin-top:5px;line-height:1.45}
+    .frow{display:flex;gap:10px}
+    .frow>.fld{flex:1}
+    .chips{display:flex;flex-wrap:wrap;gap:6px}
+    .chip{border:1px solid #1e3a5f;background:#0f1f3d;color:#94a3b8;border-radius:999px;
+      font-size:12px;padding:5px 12px;cursor:pointer;user-select:none}
+    .chip:hover{border-color:#334155}
+    .chip.on{background:rgba(37,99,235,.25);border-color:#3b82f6;color:#bfdbfe}
+    .fmsg{font-size:12px;line-height:1.5;margin-bottom:12px;padding:8px 10px;
+      border-radius:7px;display:none;word-break:break-word}
+    .fmsg.show{display:block}
+    .fmsg.ok{background:rgba(34,197,94,.10);border:1px solid #14532d;color:#86efac}
+    .fmsg.err{background:rgba(239,68,68,.10);border:1px solid #7f1d1d;color:#fca5a5}
+    .factions{display:flex;gap:9px;align-items:center;margin-top:16px;flex-wrap:wrap}
+    .factions .btn{padding:8px 15px}
+    .factions .push{margin-left:auto}
   </style>
 </head>
 <body>
@@ -241,15 +314,33 @@
       <!-- ── Columna 3 ── -->
       <div class="col">
 
-        <!-- FUENTES -->
+        <!-- RADIOS -->
         <div class="card">
-          <h2>🎵 Fuentes de audio <span id="src-spin"></span></h2>
-          <div id="src-list"><div class="hint">Cargando fuentes…</div></div>
-          <div class="hint">El interruptor enciende/apaga la visibilidad de la fuente (el ícono del ojo en OBS).</div>
+          <h2>🎵 Radios <span id="src-spin"></span>
+            <button class="btn btn-blue h2-act" onclick="openSourceForm()">➕ Agregar</button>
+          </h2>
+          <div id="radio-list"><div class="hint">Cargando radios…</div></div>
+          <div class="hint">El interruptor pone la radio al aire <b>ahora</b> (es el ojo de OBS).
+            Cuando arranca o termina un programa de la agenda, la PC del canal vuelve a mandar ella.</div>
+          <details class="more">
+            <summary>⚙️ Otras fuentes de la escena</summary>
+            <div id="src-list"><div class="hint">Cargando fuentes…</div></div>
+            <div class="hint">Cámara, reloj, clima, carrusel y demás items de la escena.
+              Acá el interruptor solo prende/apaga la visibilidad; no se administran desde el panel.</div>
+          </details>
         </div>
 
       </div>
 
+    </div>
+
+    <!-- AGENDA -->
+    <div class="card wide" id="agenda-card">
+      <h2>🗓️ Agenda de programas <span id="ag-spin"></span>
+        <button class="btn btn-blue h2-act" onclick="openProgramForm()">➕ Nuevo programa</button>
+      </h2>
+      <div id="ag-wrap"><div class="hint">Cargando agenda…</div></div>
+      <div class="hint" id="ag-hint"></div>
     </div>
 
     <!-- LOGS -->
@@ -278,6 +369,83 @@
     <img id="lightbox-img" alt="Captura ampliada">
   </div>
 
+  <!-- alta / edición de radio -->
+  <div class="fmodal" id="smodal">
+    <div class="fbox">
+      <h3 id="sf-title">Agregar radio</h3>
+      <div class="fmsg" id="sf-msg"></div>
+      <div class="fld">
+        <label>Nombre en OBS</label>
+        <input id="sf-name" type="text" maxlength="64" placeholder="RadioNueva" autocomplete="off">
+        <div class="sub">Con este nombre aparece la fuente en OBS y la usa la agenda.
+          Si lo cambiás, los programas que la usan se actualizan solos.</div>
+      </div>
+      <div class="fld">
+        <label>URL del stream</label>
+        <input id="sf-url" type="text" placeholder="https://…/stream" autocomplete="off" spellcheck="false">
+        <div class="sub">La dirección de audio de la radio (icecast/shoutcast o .m3u8).
+          Tiene que empezar con http:// o https://.</div>
+      </div>
+      <div class="frow">
+        <div class="fld">
+          <label>Buffer (MB)</label>
+          <input id="sf-buf" type="number" min="1" max="64" value="8">
+        </div>
+        <div class="fld">
+          <label>Reconexión (s)</label>
+          <input id="sf-rec" type="number" min="1" max="60" value="2">
+        </div>
+      </div>
+      <div class="sub" style="font-size:11px;color:#64748b;line-height:1.45">
+        Buffer más alto aguanta mejor los cortes de red pero demora más en arrancar.
+        Las radios actuales usan 8 MB y reconexión cada 2 s.
+      </div>
+      <div class="factions">
+        <button class="btn btn-slate" id="sf-test" onclick="testSourceUrl()">🔎 Probar URL</button>
+        <button class="btn btn-ghost push" onclick="closeSourceForm()">Cancelar</button>
+        <button class="btn btn-green" id="sf-save" onclick="saveSource()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- alta / edición de programa -->
+  <div class="fmodal" id="pmodal">
+    <div class="fbox">
+      <h3 id="pf-title">Nuevo programa</h3>
+      <div class="fmsg" id="pf-msg"></div>
+      <div class="fld">
+        <label>Nombre del programa</label>
+        <input id="pf-name" type="text" maxlength="80" placeholder="Trasnoche Paranormal" autocomplete="off">
+      </div>
+      <div class="fld">
+        <label>Radio que sale al aire</label>
+        <select id="pf-source"></select>
+      </div>
+      <div class="frow">
+        <div class="fld"><label>Empieza</label><input id="pf-start" type="time"></div>
+        <div class="fld"><label>Termina</label><input id="pf-end" type="time"></div>
+      </div>
+      <div class="fld">
+        <label>Días</label>
+        <div class="chips" id="pf-days">
+          <span class="chip" data-day="lu">lun</span>
+          <span class="chip" data-day="ma">mar</span>
+          <span class="chip" data-day="mi">mié</span>
+          <span class="chip" data-day="ju">jue</span>
+          <span class="chip" data-day="vi">vie</span>
+          <span class="chip" data-day="sa">sáb</span>
+          <span class="chip" data-day="do">dom</span>
+        </div>
+        <div class="sub" id="pf-dur"></div>
+      </div>
+      <div class="factions">
+        <button class="btn btn-red" id="pf-del" onclick="deleteProgram()">🗑 Eliminar</button>
+        <button class="btn btn-ghost push" onclick="closeProgramForm()">Cancelar</button>
+        <button class="btn btn-green" id="pf-save" onclick="saveProgram()">Guardar</button>
+      </div>
+    </div>
+  </div>
+
   <div id="modal">
     <div class="modal-box">
       <h3 id="modal-title"></h3>
@@ -304,13 +472,22 @@ function toast(msg, kind='ok', sticky=false){
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ── API ──────────────────────────────────────────────────
-async function api(method, path){
-  const r = await fetch('/obs/' + path, {method});
+async function api(method, path, payload){
+  const opt = {method};
+  if(payload !== undefined){
+    opt.headers = {'Content-Type': 'application/json'};
+    opt.body    = JSON.stringify(payload);
+  }
+  const r = await fetch('/obs/' + path, opt);
   let body = null;
   try { body = await r.json(); } catch(e){}
   if(!r.ok){
-    const detail = (body && body.detail) ? body.detail : ('HTTP ' + r.status);
-    throw new Error(detail);
+    let detail = (body && body.detail) ? body.detail : ('HTTP ' + r.status);
+    // 422 de FastAPI: detail es una lista de errores de validación, no un texto.
+    if(Array.isArray(detail)) detail = detail.map(d => d.msg || JSON.stringify(d)).join(' · ');
+    const err = new Error(detail);
+    err.status = r.status;      // el 409 de \"radio en uso\" habilita el borrado forzado
+    throw err;
   }
   return body;
 }
@@ -469,10 +646,13 @@ async function refreshSources(){
   const spin = $('#src-spin');
   spin.innerHTML = '<span class="spinner dark"></span>';
   try{
-    const list = await api('GET', 'sources');
+    const all = await api('GET', 'sources');
     setConn(true);
     const cont = $('#src-list');
-    if(!list || !list.length){ cont.innerHTML = '<div class="hint">No hay fuentes en la escena.</div>'; return; }
+    // Las radios tienen su propia tarjeta, con URL y acciones; acá va todo lo demás.
+    const radios = new Set(_radios.map(r => r.name));
+    const list = (all || []).filter(f => !radios.has(f.name));
+    if(!list.length){ cont.innerHTML = '<div class="hint">No hay otras fuentes en la escena.</div>'; return; }
     cont.innerHTML = '';
     for(const f of list){
       const row = document.createElement('div');
@@ -692,18 +872,409 @@ function tickClock(){
   $('#clk-time').textContent = `${p(n.getHours())}:${p(n.getMinutes())}:${p(n.getSeconds())}`;
 }
 
+// ── radios (fuentes de audio administrables) ─────────────
+// Cada radio queda con un color propio derivado del nombre, para poder seguirla
+// de un vistazo entre la lista y los bloques de la agenda.
+function srcHue(name){
+  let h = 0;
+  for(let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) % 360;
+  return h;
+}
+const srcColor = n => 'hsl(' + srcHue(n) + ' 72% 62%)';
+const srcBg    = n => 'hsl(' + srcHue(n) + ' 50% 24%)';
+
+let _radios = [];
+
+async function refreshRadios(){
+  const spin = $('#src-spin');
+  spin.innerHTML = '<span class="spinner dark"></span>';
+  try{
+    _radios = await api('GET', 'sources/audio');
+    setConn(true);
+    renderRadios();
+  }catch(e){
+    setConn(false);
+    $('#radio-list').innerHTML = '<div class="hint">No se pudieron cargar las radios: ' +
+      escapeHtml(e.message) + '</div>';
+  }finally{
+    spin.innerHTML = '';
+  }
+}
+
+function renderRadios(){
+  const cont = $('#radio-list');
+  if(!_radios.length){
+    cont.innerHTML = '<div class="hint">Todavía no hay radios cargadas. Tocá «Agregar».</div>';
+    return;
+  }
+  cont.innerHTML = '';
+  for(const r of _radios){
+    const row = document.createElement('div');
+    row.className = 'src-row';
+    row.innerHTML =
+      '<div class="src-main">' +
+        '<div class="src-name">' +
+          '<span class="eye">' + (r.enabled ? '👁' : '🚫') + '</span>' +
+          '<span class="dot-src" style="color:' + srcColor(r.name) + '">●</span>' +
+          escapeHtml(r.name) +
+          (r.is_default ? ' <span class="badge def">por defecto</span>' : '') +
+          (r.used_by.length ? ' <span class="badge">' + r.used_by.length + ' prog.</span>' : '') +
+        '</div>' +
+        '<div class="src-sub">' + escapeHtml(r.url) + '</div>' +
+      '</div>' +
+      '<div class="src-actions">' +
+        '<button class="icon-btn" data-act="edit" title="Editar">✏️</button>' +
+        (r.is_default ? '' : '<button class="icon-btn" data-act="del" title="Eliminar">🗑</button>') +
+        '<label class="toggle"><input type="checkbox"' + (r.enabled ? ' checked' : '') +
+          '><span class="slider"></span></label>' +
+      '</div>';
+    const input = row.querySelector('input[type=checkbox]');
+    input.addEventListener('change', () => toggleSource(r.name, input.checked, row));
+    row.querySelector('[data-act=edit]').onclick = () => openSourceForm(r);
+    const del = row.querySelector('[data-act=del]');
+    if(del) del.onclick = () => deleteRadio(r);
+    cont.appendChild(row);
+  }
+}
+
+// ── form de radio ────────────────────────────────────────
+let _editingSource = null;
+
+function openSourceForm(radio){
+  _editingSource = radio || null;
+  $('#sf-title').textContent = radio ? 'Editar radio' : 'Agregar radio';
+  $('#sf-name').value = radio ? radio.name : '';
+  $('#sf-url').value  = radio ? radio.url  : '';
+  $('#sf-buf').value  = radio ? (radio.buffering_mb || 8) : 8;
+  $('#sf-rec').value  = radio ? (radio.reconnect_delay_sec || 2) : 2;
+  fmsg('#sf-msg', '');
+  $('#smodal').classList.add('show');
+  setTimeout(() => $('#sf-name').focus(), 60);
+}
+function closeSourceForm(){ $('#smodal').classList.remove('show'); }
+
+async function testSourceUrl(){
+  const url = $('#sf-url').value.trim();
+  if(!url){ fmsg('#sf-msg', 'Cargá primero la URL.', 'err'); return; }
+  const btn = $('#sf-test');
+  btn.disabled = true;
+  fmsg('#sf-msg', '⏳ Probando la URL desde la PC del canal…', 'ok');
+  try{
+    const r = await api('POST', 'sources/audio/test', {url});
+    setConn(true);
+    if(r.ok){
+      const bits = [r.codec];
+      if(r.sample_rate) bits.push(r.sample_rate + ' Hz');
+      if(r.channels)    bits.push(r.channels === 1 ? 'mono' : r.channels + ' canales');
+      if(r.bit_rate)    bits.push(Math.round(r.bit_rate / 1000) + ' kbps');
+      fmsg('#sf-msg', '🟢 La URL responde con audio: ' + bits.join(' · '), 'ok');
+    }else{
+      fmsg('#sf-msg', '🔴 La PC del canal no pudo leer audio de esa URL. ' + (r.detail || ''), 'err');
+    }
+  }catch(e){
+    setConn(false);
+    fmsg('#sf-msg', '🔴 ' + e.message, 'err');
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+async function saveSource(){
+  const name = $('#sf-name').value.trim();
+  const url  = $('#sf-url').value.trim();
+  if(!name){ fmsg('#sf-msg', 'Ponele un nombre a la radio.', 'err'); return; }
+  if(!url){  fmsg('#sf-msg', 'Falta la URL del stream.', 'err');   return; }
+
+  const body = {name, url,
+                buffering_mb: +$('#sf-buf').value || 8,
+                reconnect_delay_sec: +$('#sf-rec').value || 2};
+  const btn = $('#sf-save');
+  btn.disabled = true;
+  try{
+    if(_editingSource)
+      await api('PUT', 'sources/audio/' + encodeURIComponent(_editingSource.name), body);
+    else
+      await api('POST', 'sources/audio', body);
+    setConn(true);
+    closeSourceForm();
+    toast((_editingSource ? '✅ ' : '➕ ') + name + (_editingSource ? ' actualizada' : ' agregada'), 'ok');
+    await refreshRadios();
+    refreshAgenda();
+    refreshSources();
+  }catch(e){
+    fmsg('#sf-msg', '❌ ' + e.message, 'err');
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+function deleteRadio(r){
+  const del = async (force) => {
+    const q = 'sources/audio/' + encodeURIComponent(r.name) + (force ? '?force=true' : '');
+    const res = await api('DELETE', q);
+    toast('🗑 ' + r.name + ' eliminada' +
+          (res.programs_removed ? ' · ' + res.programs_removed + ' programa(s) borrados' : ''), 'ok');
+    await refreshRadios();
+    refreshAgenda();
+    refreshSources();
+  };
+  openConfirm('Eliminar «' + r.name + '»',
+    'Se borra la fuente de OBS. Si está al aire, el canal vuelve antes a la fuente por defecto.',
+    async () => {
+      try{
+        await del(false);
+      }catch(e){
+        if(e.status === 409){
+          // La radio tiene programas en la agenda: hace falta un segundo OK.
+          openConfirm('«' + r.name + '» está programada',
+            e.message + '. Si la borrás igual, esos programas también salen de la agenda.',
+            async () => {
+              try{ await del(true); }
+              catch(e2){ toast('❌ ' + e2.message, 'err'); }
+            });
+        }else{
+          toast('❌ ' + e.message, 'err');
+        }
+      }
+    });
+}
+
+// ── agenda semanal ───────────────────────────────────────
+const AG_DAYS   = ['lu','ma','mi','ju','vi','sa','do'];
+const AG_LABELS = {lu:'lun', ma:'mar', mi:'mié', ju:'jue', vi:'vie', sa:'sáb', do:'dom'};
+
+let _programs = [];
+
+const toMin  = t => { const [h,m] = (t||'0:0').split(':').map(Number); return h*60 + m; };
+const fmtMin = m => String(Math.floor(m/60)).padStart(2,'0') + ':' + String(m%60).padStart(2,'0');
+
+// Un programa que cruza la medianoche ocupa dos columnas: el tramo hasta las 24:00
+// del día configurado y el resto al día siguiente (así lo interpreta el runner de
+// la PC de OBS, que busca el fin en el día posterior).
+function agSegments(p){
+  const s = toMin(p.start), e = toMin(p.end), segs = [];
+  for(const d of (p.days || [])){
+    const i = AG_DAYS.indexOf(d);
+    if(i < 0) continue;
+    if(e > s){
+      segs.push({p, day:i, from:s, to:e, cont:''});
+    }else{
+      segs.push({p, day:i,         from:s, to:1440, cont:'→'});
+      segs.push({p, day:(i+1) % 7, from:0, to:e,    cont:'←'});
+    }
+  }
+  return segs;
+}
+
+async function refreshAgenda(){
+  const spin = $('#ag-spin');
+  spin.innerHTML = '<span class="spinner dark"></span>';
+  try{
+    _programs = await api('GET', 'programs');
+    setConn(true);
+    renderAgenda();
+  }catch(e){
+    setConn(false);
+    $('#ag-wrap').innerHTML = '<div class="hint">No se pudo cargar la agenda: ' +
+      escapeHtml(e.message) + '</div>';
+  }finally{
+    spin.innerHTML = '';
+  }
+}
+
+function renderAgenda(){
+  const now      = new Date();
+  const todayIdx = (now.getDay() + 6) % 7;              // 0 = lunes
+  const nowMin   = now.getHours() * 60 + now.getMinutes();
+  const segs     = (_programs || []).flatMap(agSegments);
+
+  let html = '<div class="ag"><div class="ag-head"></div>';
+  for(let i = 0; i < 7; i++)
+    html += '<div class="ag-head' + (i === todayIdx ? ' today' : '') + '">' +
+            AG_LABELS[AG_DAYS[i]] + '</div>';
+
+  html += '<div class="ag-gutter">';
+  for(let h = 1; h < 24; h++)
+    html += '<span style="top:' + (h / 24 * 100) + '%">' + String(h).padStart(2,'0') + '</span>';
+  html += '</div>';
+
+  for(let i = 0; i < 7; i++){
+    html += '<div class="ag-col">';
+    for(const s of segs.filter(x => x.day === i)){
+      const label = (s.cont === '←' ? '…' : '') + fmtMin(s.from) + '–' +
+                    fmtMin(s.to) + (s.cont === '→' ? '…' : '');
+      html +=
+        '<div class="ag-blk" data-id="' + escapeHtml(s.p.id) + '"' +
+          ' title="' + escapeHtml(s.p.name + ' · ' + s.p.source + ' · ' +
+                                 s.p.start + '–' + s.p.end) + '"' +
+          ' style="top:' + (s.from / 1440 * 100) + '%;height:' + ((s.to - s.from) / 1440 * 100) +
+          '%;background:' + srcBg(s.p.source) + ';border-left-color:' + srcColor(s.p.source) + '">' +
+          '<b>' + escapeHtml(s.p.name) + '</b><i>' + label + '</i>' +
+        '</div>';
+    }
+    if(i === todayIdx)
+      html += '<div class="ag-now" style="top:' + (nowMin / 1440 * 100) + '%"></div>';
+    html += '</div>';
+  }
+  html += '</div>';
+
+  $('#ag-wrap').innerHTML = html;
+  $('#ag-wrap').querySelectorAll('.ag-blk').forEach(el => {
+    el.onclick = () => openProgramForm(_programs.find(p => p.id === el.dataset.id));
+  });
+
+  const def = (_radios.find(r => r.is_default) || {}).name;
+  $('#ag-hint').innerHTML =
+    (_programs.length ? '' : '<b>No hay ningún programa cargado.</b> ') +
+    'Fuera de estos bloques suena ' +
+    (def ? '<b>' + escapeHtml(def) + '</b>' : 'la fuente por defecto') + '. ' +
+    'El cambio lo hace la PC del canal en el minuto exacto de inicio y de fin, así que entre ' +
+    'un programa y el siguiente tiene que quedar al menos un minuto libre (por eso 08:01–10:00 ' +
+    'y después 10:01–13:00). Tocá un bloque para editarlo.';
+}
+
+// Mover la línea de "ahora" sin volver a pedir la agenda a la PC de OBS.
+function tickAgendaNow(){
+  const el = document.querySelector('.ag-now');
+  if(!el) return;
+  const n = new Date();
+  el.style.top = ((n.getHours() * 60 + n.getMinutes()) / 1440 * 100) + '%';
+}
+
+// ── form de programa ─────────────────────────────────────
+let _editingProgram = null;
+
+function openProgramForm(prog){
+  _editingProgram = prog || null;
+  $('#pf-title').textContent = prog ? 'Editar programa' : 'Nuevo programa';
+  $('#pf-name').value  = prog ? prog.name  : '';
+  $('#pf-start').value = prog ? prog.start : '';
+  $('#pf-end').value   = prog ? prog.end   : '';
+
+  const sel   = $('#pf-source');
+  const names = _radios.map(r => r.name);
+  // Una fuente que quedó en la agenda pero ya no está en OBS se ofrece igual, marcada:
+  // si no, editar el horario de ese programa la borraría sin querer.
+  if(prog && prog.source && !names.includes(prog.source)) names.push(prog.source);
+  sel.innerHTML = '';
+  for(const n of names){
+    const o = document.createElement('option');
+    o.value = n;
+    o.textContent = n + (_radios.some(r => r.name === n) ? '' : ' (ya no está en OBS)');
+    sel.appendChild(o);
+  }
+  sel.value = prog ? prog.source : (names[0] || '');
+
+  $('#pf-days').querySelectorAll('.chip').forEach(c =>
+    c.classList.toggle('on', !!prog && (prog.days || []).includes(c.dataset.day)));
+
+  $('#pf-del').style.display = prog ? '' : 'none';
+  fmsg('#pf-msg', '');
+  updateProgramDuration();
+  $('#pmodal').classList.add('show');
+  setTimeout(() => $('#pf-name').focus(), 60);
+}
+function closeProgramForm(){ $('#pmodal').classList.remove('show'); }
+
+function updateProgramDuration(){
+  const a = $('#pf-start').value, b = $('#pf-end').value;
+  const out = $('#pf-dur');
+  if(!a || !b){ out.textContent = ''; return; }
+  const span = ((toMin(b) - toMin(a)) % 1440 + 1440) % 1440;
+  if(!span){ out.textContent = 'Empieza y termina a la misma hora.'; return; }
+  const h = Math.floor(span / 60), m = span % 60;
+  out.textContent = 'Dura ' + (h ? h + ' h ' : '') + (m ? m + ' min' : '').trim() +
+    (toMin(b) <= toMin(a) ? ' · cruza la medianoche: termina al día siguiente.' : '');
+}
+
+async function saveProgram(){
+  const days = [...$('#pf-days').querySelectorAll('.chip.on')].map(c => c.dataset.day);
+  const body = {
+    name:   $('#pf-name').value.trim(),
+    source: $('#pf-source').value,
+    start:  $('#pf-start').value,
+    end:    $('#pf-end').value,
+    days,
+  };
+  if(!body.name){   fmsg('#pf-msg', 'Ponele un nombre al programa.', 'err'); return; }
+  if(!body.source){ fmsg('#pf-msg', 'Elegí qué radio sale al aire.', 'err'); return; }
+  if(!body.start || !body.end){ fmsg('#pf-msg', 'Faltan la hora de inicio o la de fin.', 'err'); return; }
+  if(!days.length){ fmsg('#pf-msg', 'Elegí al menos un día.', 'err'); return; }
+
+  const btn = $('#pf-save');
+  btn.disabled = true;
+  try{
+    if(_editingProgram)
+      await api('PUT', 'programs/' + encodeURIComponent(_editingProgram.id), body);
+    else
+      await api('POST', 'programs', body);
+    setConn(true);
+    closeProgramForm();
+    toast('✅ Agenda guardada · ' + body.name, 'ok');
+    await refreshAgenda();
+    refreshRadios();
+  }catch(e){
+    fmsg('#pf-msg', '❌ ' + e.message, 'err');
+  }finally{
+    btn.disabled = false;
+  }
+}
+
+function deleteProgram(){
+  const prog = _editingProgram;
+  if(!prog) return;
+  closeProgramForm();
+  openConfirm('Eliminar «' + prog.name + '»',
+    'Sale de la agenda. En ese horario va a sonar la fuente por defecto.',
+    async () => {
+      try{
+        await api('DELETE', 'programs/' + encodeURIComponent(prog.id));
+        toast('🗑 ' + prog.name + ' eliminado de la agenda', 'ok');
+        await refreshAgenda();
+        refreshRadios();
+      }catch(e){
+        toast('❌ ' + e.message, 'err');
+      }
+    });
+}
+
+
 // ── util ─────────────────────────────────────────────────
 function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function escapeMultiline(s){ return escapeHtml(s).replace(/\n/g, '<br>'); }
 
-function refreshAll(){ refreshStatus(); refreshSources(); }
+function fmsg(sel, text, kind){
+  const el = $(sel);
+  el.className   = 'fmsg' + (text ? ' show ' + (kind || 'ok') : '');
+  el.textContent = text || '';
+}
+
+async function refreshAll(){
+  refreshStatus();
+  await refreshRadios();      // la agenda y "otras fuentes" dependen de esta lista
+  refreshSources();
+  refreshAgenda();
+}
 
 // cambiar de log mientras se reproduce → refetch inmediato del nuevo servicio
 $('#log-svc').addEventListener('change', () => { if(logState === 'playing') fetchLogsOnce(); });
 
+// forms: chips de días, duración en vivo y cierre con click afuera / Escape
+$('#pf-days').addEventListener('click', e => {
+  if(e.target.classList.contains('chip')) e.target.classList.toggle('on');
+});
+$('#pf-start').addEventListener('change', updateProgramDuration);
+$('#pf-end').addEventListener('change', updateProgramDuration);
+$('#smodal').addEventListener('click', e => { if(e.target.id === 'smodal') closeSourceForm(); });
+$('#pmodal').addEventListener('click', e => { if(e.target.id === 'pmodal') closeProgramForm(); });
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape'){ closeSourceForm(); closeProgramForm(); }
+});
+
 // ── arranque + polling ───────────────────────────────────
 tickClock();
 setInterval(tickClock, 1000);
+setInterval(tickAgendaNow, 60000);
 refreshAll();
 logSetUI();
 let timer = setInterval(() => { if(!document.hidden) refreshStatus(); }, 8000);

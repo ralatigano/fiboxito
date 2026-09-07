@@ -11,6 +11,56 @@ Las fechas están en formato AAAA-MM-DD. Lo más nuevo va arriba.
 
 ---
 
+## v1.7.0 — 2026-09-07
+
+### El panel ya administra las radios y muestra la agenda del canal
+
+- **Se pueden dar de alta radios nuevas desde el panel.** Hasta ahora, para sumar
+  una radio (como FM Espacio o Radio San Nicolás) había que sentarse en la PC del
+  canal y crear la fuente a mano dentro de OBS. Ahora la tarjeta **"Radios"** del
+  panel tiene un botón **"Agregar"**: se carga el nombre y la dirección del stream,
+  y la radio queda lista para usarse y para programarse. También se pueden **editar**
+  (cambiar la dirección o el nombre) y **eliminar**.
+- **Antes de guardar se puede probar la dirección.** El botón **"Probar URL"** hace
+  que la PC del canal se conecte de verdad a esa radio y avise si suena, con qué
+  calidad y en cuántos canales. Sirve para no descubrir recién al aire que la
+  dirección estaba mal. Es la única prueba confiable: una vez creada, la fuente
+  puede "figurar" reproduciendo aunque no salga sonido.
+- **Si se le cambia el nombre a una radio, los programas la siguen.** Los horarios
+  identifican a la radio por su nombre, así que renombrarla desde OBS rompía la
+  programación en silencio. El panel ahora actualiza solo los programas que la usan.
+- **Eliminar una radio programada pide confirmación.** El panel avisa en qué
+  programas está usada y, si se confirma igual, los saca de la agenda junto con
+  la radio. La radio por defecto (la que suena cuando no hay ningún programa al
+  aire) no se puede borrar. Si la radio estaba al aire en ese momento, el canal
+  vuelve a la fuente por defecto antes de eliminarla, para no quedarse mudo.
+
+- **Nueva vista de agenda semanal.** El panel suma una grilla de lunes a domingo
+  con los programas dibujados en su horario, cada uno con el color de su radio.
+  Es la misma vista de calendario que tenía el panel de escritorio viejo, ahora en
+  el navegador. Se ve de un vistazo qué suena cada día y a qué hora, con una línea
+  roja marcando el momento actual. Los programas que cruzan la medianoche se
+  muestran partidos entre los dos días, que es como realmente funcionan.
+- **Los programas se administran desde ahí mismo.** Tocando un bloque se abre el
+  formulario para cambiarle el nombre, la radio, los horarios o los días, o para
+  eliminarlo; y el botón "Nuevo programa" agrega uno. Los cambios se guardan
+  directo en la PC del canal.
+- **El panel no deja guardar una programación que rompería el canal.** El cambio de
+  radio lo hace la PC del canal en el minuto exacto en que un programa empieza o
+  termina, así que dos programas pegados o superpuestos la dejaban en la radio
+  equivocada. Ahora avisa antes de guardar si dos programas se pisan (contemplando
+  los que cruzan la medianoche y los que arrancan un domingo y siguen el lunes), si
+  falta un dato, o si apunta a una radio que ya no existe en OBS.
+- **La programación se guarda de forma segura.** El archivo de horarios de la PC del
+  canal se escribe de una sola vez y se verifica antes de reemplazar el anterior,
+  del que además queda una copia. Antes, una escritura a medias podía dejar el
+  canal sin cambios de radio automáticos sin que nadie se enterara.
+- **La lista de fuentes quedó más clara.** Las radios tienen su propia tarjeta, con
+  la dirección de cada una y sus acciones; el resto de los elementos de la escena
+  (cámara, reloj, clima, carrusel) pasó a una sección aparte que se despliega.
+
+---
+
 ## v1.6.5 — 2026-09-01
 
 ### Se destraba la habilitación de ONT (autorización)

@@ -17,9 +17,17 @@ OBS_SSH_PASSWORD = os.getenv("OBS_SSH_PASSWORD", "")
 OBS_SCENE_NAME    = os.getenv("OBS_SCENE_NAME", "Escena")
 OBS_DEFAULT_SOURCE = os.getenv("OBS_DEFAULT_SOURCE", "musica")
 OBS_WS_SCRIPT     = "/opt/obs-watchdog/modules/obs_ws.py"
+# Script del watchdog que hace el swap de fuente (incluye el toggle que recupera
+# el audio de las radios). Lo reusa el panel para no duplicar esa lógica.
+OBS_SWITCH_SCRIPT = "/opt/obs-watchdog/modules/cambiar_fuente.sh"
 OBS_STATE_FILE    = "/opt/obs-watchdog/state.json"
 OBS_LOG_FILE      = "/opt/obs-watchdog/logs/watchdog.log"
 OBS_PROGRAMS_FILE = "/opt/obs-watchdog/data/programs.json"
+
+# Tipo de input de OBS con el que se dan de alta las radios (fuentes de audio de
+# red). Todas las radios existentes (RadioFMEspacio, RadioSanNicolas, RadioPop,
+# musica) son `ffmpeg_source` apuntando a una URL de streaming.
+OBS_AUDIO_INPUT_KIND = "ffmpeg_source"
 
 # Comando que reinicia la PC remota. Configurable por si el host necesita sudo
 # con contraseña o un binario distinto. Default: sudo sin contraseña.

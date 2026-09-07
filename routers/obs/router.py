@@ -13,6 +13,28 @@ def _ssh_error(e: Exception):
     raise HTTPException(status_code=503, detail=str(e))
 
 
+def _guard(fn):
+    """Traduce los errores del service a códigos HTTP con mensaje mostrable.
+
+    ValueError    → 400  (dato mal cargado por el usuario, o rechazo de OBS)
+    LookupError   → 404  (id de programa inexistente)
+    SourceInUse   → 409  (la radio está programada; el panel ofrece forzar)
+    lo que quede  → 503  (no se pudo llegar a la PC de OBS)
+    """
+    try:
+        return fn()
+    except service.SourceInUse as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        _ssh_error(e)
+
+
 @router.get("/panel", response_class=HTMLResponse)
 def panel(request: Request):
     return templates.TemplateResponse(request=request, name="obs.html")
@@ -84,6 +106,63 @@ def disable_source(name: str):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         _ssh_error(e)
+
+
+# ── Radios (fuentes de audio administrables) ───────────────────
+
+class AudioSourceCreate(BaseModel):
+    name: str
+    url: str
+    buffering_mb: int | None = None
+    reconnect_delay_sec: int | None = None
+
+
+class AudioSourceUpdate(BaseModel):
+    name: str | None = None          # nuevo nombre (renombra el input en OBS)
+    url: str | None = None
+    buffering_mb: int | None = None
+    reconnect_delay_sec: int | None = None
+
+
+class StreamUrlPayload(BaseModel):
+    url: str
+
+
+@router.get("/sources/audio")
+def audio_sources():
+    """Solo las radios: los ffmpeg_source de la escena que apuntan a una URL."""
+    return _guard(service.list_audio_sources)
+
+
+@router.post("/sources/audio")
+def create_audio_source(payload: AudioSourceCreate):
+    kwargs = {k: v for k, v in
+              {"buffering_mb": payload.buffering_mb,
+               "reconnect_delay_sec": payload.reconnect_delay_sec}.items() if v is not None}
+    return _guard(lambda: service.create_audio_source(payload.name, payload.url, **kwargs))
+
+
+@router.post("/sources/audio/test")
+def test_audio_source(payload: StreamUrlPayload):
+    """Prueba la URL con ffprobe desde la PC de OBS, antes de dar de alta la radio."""
+    return _guard(lambda: service.probe_stream_url(payload.url))
+
+
+@router.put("/sources/audio/{name}")
+def update_audio_source(name: str, payload: AudioSourceUpdate):
+    return _guard(lambda: service.update_audio_source(
+        name,
+        url=payload.url,
+        new_name=payload.name,
+        buffering_mb=payload.buffering_mb,
+        reconnect_delay_sec=payload.reconnect_delay_sec,
+    ))
+
+
+@router.delete("/sources/audio/{name}")
+def delete_audio_source(name: str, force: bool = False):
+    """`force=true` borra además los programas que usaban esa radio."""
+    return _guard(lambda: service.delete_audio_source(name, force=force))
 
 
 @router.post("/stream/start")
@@ -196,22 +275,41 @@ def system_display_fix():
         _ssh_error(e)
 
 
-@router.get("/programs")
-def get_programs():
-    try:
-        return service.get_programs()
-    except Exception as e:
-        _ssh_error(e)
-
+# ── Programación / agenda ──────────────────────────────────────
 
 class ProgramsPayload(BaseModel):
     programs: list
 
 
+class ProgramPayload(BaseModel):
+    name: str
+    source: str
+    start: str                       # "HH:MM"
+    end: str                         # "HH:MM"; menor que start = cruza la medianoche
+    days: list[str]                  # lu ma mi ju vi sa do
+
+
+@router.get("/programs")
+def get_programs():
+    return _guard(service.get_programs)
+
+
 @router.put("/programs")
 def set_programs(payload: ProgramsPayload):
-    try:
-        service.set_programs(payload.programs)
-        return {"ok": True}
-    except Exception as e:
-        _ssh_error(e)
+    """Reemplaza la agenda completa (la usa el guardado masivo)."""
+    return _guard(lambda: {"ok": True, "programs": service.set_programs(payload.programs)})
+
+
+@router.post("/programs")
+def add_program(payload: ProgramPayload):
+    return _guard(lambda: service.add_program(payload.model_dump()))
+
+
+@router.put("/programs/{program_id}")
+def update_program(program_id: str, payload: ProgramPayload):
+    return _guard(lambda: service.update_program(program_id, payload.model_dump()))
+
+
+@router.delete("/programs/{program_id}")
+def delete_program(program_id: str):
+    return _guard(lambda: service.delete_program(program_id))

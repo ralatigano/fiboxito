@@ -1,11 +1,13 @@
 import json
+import re
 import shlex
+import uuid
 from contextlib import contextmanager
 
 from routers.obs.config import (
     OBS_SSH_HOST, OBS_SSH_PORT, OBS_SSH_USER, OBS_SSH_PASSWORD,
     OBS_SCENE_NAME, OBS_DEFAULT_SOURCE, OBS_WS_SCRIPT, OBS_STATE_FILE, OBS_PROGRAMS_FILE,
-    OBS_REBOOT_CMD,
+    OBS_REBOOT_CMD, OBS_AUDIO_INPUT_KIND, OBS_SWITCH_SCRIPT,
 )
 from routers.obs.ssh_client import SSHClient
 from routers.obs.watchdog_ctrl import WatchdogController
@@ -40,14 +42,20 @@ def _ssh():
         client.disconnect()
 
 
+def _ws_cmd(request_type: str, data: dict) -> str:
+    """Arma la línea de shell de un request. `shlex.quote` en vez de comillas simples
+    a mano: los nombres de fuente y las URLs los escribe el usuario en el panel y
+    pueden traer apóstrofes, que rompían el comando."""
+    return f"python3 {OBS_WS_SCRIPT} {shlex.quote(request_type)} {shlex.quote(json.dumps(data))}"
+
+
 def _ws(ssh: SSHClient, request_type: str, data: dict = {}) -> dict:
     """
     Ejecuta un request OBS WebSocket vía script remoto.
     obs_ws.py retorna directamente el responseData desenvuelto.
     """
     from logger import log_debug
-    cmd = f"python3 {OBS_WS_SCRIPT} {request_type} '{json.dumps(data)}'"
-    out, err = ssh.run_command(cmd)
+    out, err = ssh.run_command(_ws_cmd(request_type, data))
     if err:
         log_debug(f"[OBS WS stderr] {request_type}: {err}")
     if out:
@@ -57,6 +65,65 @@ def _ws(ssh: SSHClient, request_type: str, data: dict = {}) -> dict:
             log_debug(f"[OBS WS parse error] {request_type}: {out!r}")
             return {"_raw": out}
     return {}
+
+
+def _ws_strict(ssh: SSHClient, request_type: str, data: dict = {}) -> dict:
+    """
+    Igual que `_ws`, pero levanta el error en vez de tragárselo.
+
+    `obs_ws.py` escribe la respuesta completa en stderr y sale con 1 cuando OBS
+    rechaza el request (nombre duplicado, fuente inexistente, etc.). `_ws` devuelve
+    `{}` en ese caso, lo que en una escritura se leería como "salió bien". Para las
+    altas/bajas/ediciones eso no sirve: acá traducimos el `requestStatus.comment`
+    de OBS a un ValueError con texto en castellano.
+    """
+    out, err = ssh.run_command(_ws_cmd(request_type, data))
+    if err:
+        raise ValueError(f"OBS rechazó {request_type}: {_ws_error_text(err)}")
+    if not out:
+        return {}
+    try:
+        return json.loads(out)
+    except json.JSONDecodeError:
+        raise ValueError(f"Respuesta ilegible de OBS en {request_type}: {out[:200]!r}")
+
+
+def _ws_error_text(stderr: str) -> str:
+    """Extrae el motivo legible del JSON de error que imprime obs_ws.py."""
+    try:
+        payload = json.loads(stderr)
+    except json.JSONDecodeError:
+        return stderr.strip()[:200]
+    if "error" in payload:                       # falló la conexión al WebSocket
+        return str(payload["error"])[:200]
+    st = payload.get("requestStatus", {}) or {}
+    if st.get("comment"):
+        return str(st["comment"])[:200]
+    if st.get("code"):
+        return f"código {st['code']}"
+    return "motivo desconocido"
+
+
+def _ws_many(ssh: SSHClient, requests: list[tuple[str, dict]]) -> list[dict]:
+    """
+    Ejecuta varios requests en UNA sola llamada SSH y devuelve una respuesta por
+    pedido, en orden. Cada request abre su propio WebSocket (~0,2 s), pero se ahorra
+    el ida y vuelta de SSH, que es lo caro: leer las URLs de 5 radios pasa de 5
+    round-trips a 1. Un request que falla devuelve `{}` en su posición (el
+    `|| echo {}` mantiene alineadas las líneas con los pedidos).
+    """
+    if not requests:
+        return []
+    parts = [f"{{ {_ws_cmd(rt, d)} 2>/dev/null || echo '{{}}'; }}" for rt, d in requests]
+    out, _ = ssh.run_command(" ; ".join(parts), timeout=max(20, 4 * len(requests)))
+    lines = out.splitlines()
+    result = []
+    for i in range(len(requests)):
+        try:
+            result.append(json.loads(lines[i]))
+        except (IndexError, json.JSONDecodeError):
+            result.append({})
+    return result
 
 
 def _load_known_sources(ssh: SSHClient) -> set[str]:
@@ -153,6 +220,264 @@ def set_source_enabled(source_name: str, enabled: bool):
             "sceneItemId":      item_id,
             "sceneItemEnabled": enabled,
         })
+
+
+# ── Radios (alta/baja/edición de fuentes de audio) ─────────────
+# Una "radio" es un input `ffmpeg_source` que apunta a una URL de streaming y vive
+# en la escena principal: es lo que el watchdog prende y apaga por horario. Se
+# distingue del resto de los ffmpeg_source de la escena (videos de publicidad,
+# cortinas) porque `is_local_file` es false y la URL tiene esquema de red.
+#
+# Hasta ahora estas fuentes solo se podían crear abriendo OBS Studio en la PC del
+# canal. Acá se hacen por WebSocket (CreateInput / SetInputSettings / RemoveInput),
+# que es exactamente lo que hace la UI de OBS.
+
+# Las radios son streams HTTP (icecast/shoutcast/HLS). El filtro por esquema es lo
+# que separa una radio del resto de los ffmpeg_source de la escena: la cámara IP vieja
+# ("Fuente multimedia1") es un ffmpeg_source rtsp:// y no tiene nada que hacer acá.
+_URL_SCHEMES = ("http://", "https://")
+_DEFAULT_BUFFERING_MB  = 8
+_DEFAULT_RECONNECT_SEC = 2
+
+
+class SourceInUse(Exception):
+    """La fuente que se quiere borrar está usada por programas de la agenda."""
+
+    def __init__(self, program_names: list[str]):
+        self.programs = program_names
+        super().__init__("La fuente está programada en: " + ", ".join(program_names))
+
+
+def _clamp_int(value, lo: int, hi: int, default: int) -> int:
+    try:
+        return max(lo, min(hi, int(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _clean_source_name(name: str) -> str:
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("El nombre de la fuente no puede estar vacío")
+    if len(name) > 64:
+        raise ValueError("El nombre no puede superar los 64 caracteres")
+    if any(ord(c) < 32 for c in name):
+        raise ValueError("El nombre no puede tener saltos de línea ni caracteres de control")
+    return name
+
+
+def _clean_stream_url(url: str) -> str:
+    url = (url or "").strip()
+    if not url:
+        raise ValueError("La URL del stream no puede estar vacía")
+    if not url.lower().startswith(_URL_SCHEMES):
+        raise ValueError("La URL de la radio tiene que empezar con http:// o https://")
+    if any(c.isspace() or ord(c) < 32 for c in url):
+        raise ValueError("La URL no puede tener espacios ni saltos de línea")
+    return url
+
+
+def _scene_source_names(ssh: SSHClient) -> set[str]:
+    items = _ws(ssh, "GetSceneItemList", {"sceneName": OBS_SCENE_NAME}).get("sceneItems", [])
+    return {it.get("sourceName") for it in items if it.get("sourceName")}
+
+
+def _input_names(ssh: SSHClient) -> set[str]:
+    inputs = _ws(ssh, "GetInputList").get("inputs", [])
+    return {i.get("inputName") for i in inputs if i.get("inputName")}
+
+
+def _switch_source(ssh: SSHClient, current: str, target: str):
+    """Cambia la fuente al aire con el MISMO script que usa el watchdog por horario
+    (`cambiar_fuente.sh`), para heredar el toggle de recuperación de audio: encender
+    una fuente de red sin ese ciclo la deja sonando muda."""
+    ssh.run_command(
+        f"bash {OBS_SWITCH_SCRIPT} {shlex.quote(current)} {shlex.quote(target)}",
+        timeout=40,
+    )
+
+
+def _audio_sources(ssh: SSHClient) -> list[dict]:
+    items = _ws(ssh, "GetSceneItemList", {"sceneName": OBS_SCENE_NAME}).get("sceneItems", [])
+
+    # Una misma fuente puede aparecer más de una vez en la escena; nos quedamos con
+    # la primera aparición (es la que resuelven GetSceneItemId y cambiar_fuente.sh).
+    cand: dict[str, dict] = {}
+    for it in items:
+        name = it.get("sourceName")
+        if it.get("inputKind") != OBS_AUDIO_INPUT_KIND or not name or name in cand:
+            continue
+        cand[name] = {
+            "name":          name,
+            "scene_item_id": it.get("sceneItemId"),
+            "enabled":       bool(it.get("sceneItemEnabled")),
+        }
+    if not cand:
+        return []
+
+    names    = list(cand)
+    settings = _ws_many(ssh, [("GetInputSettings", {"inputName": n}) for n in names])
+    programs = _read_programs(ssh, strict=False)
+
+    out = []
+    for name, resp in zip(names, settings):
+        st  = resp.get("inputSettings", {}) or {}
+        url = st.get("input") or ""
+        # Un ffmpeg_source de archivo local (video de publicidad, cortina) no es radio.
+        if st.get("is_local_file") or not url.lower().startswith(_URL_SCHEMES):
+            continue
+        row = cand[name]
+        row.update({
+            "url":                 url,
+            "buffering_mb":        st.get("buffering_mb", _DEFAULT_BUFFERING_MB),
+            "reconnect_delay_sec": st.get("reconnect_delay_sec", _DEFAULT_RECONNECT_SEC),
+            "is_default":          name == OBS_DEFAULT_SOURCE,
+            "used_by":             [p.get("name", "") for p in programs if p.get("source") == name],
+        })
+        out.append(row)
+
+    # La fuente por defecto primero: es la que suena cuando no hay programa al aire.
+    out.sort(key=lambda r: (not r["is_default"], r["name"].lower()))
+    return out
+
+
+def list_audio_sources() -> list[dict]:
+    with _ssh() as ssh:
+        return _audio_sources(ssh)
+
+
+def create_audio_source(name: str, url: str,
+                        buffering_mb=_DEFAULT_BUFFERING_MB,
+                        reconnect_delay_sec=_DEFAULT_RECONNECT_SEC) -> dict:
+    """Da de alta una radio. Queda en la escena con la visibilidad apagada, que es
+    como están el resto de las radios fuera de su horario."""
+    name = _clean_source_name(name)
+    url  = _clean_stream_url(url)
+    buffering_mb        = _clamp_int(buffering_mb, 1, 64, _DEFAULT_BUFFERING_MB)
+    reconnect_delay_sec = _clamp_int(reconnect_delay_sec, 1, 60, _DEFAULT_RECONNECT_SEC)
+
+    with _ssh() as ssh:
+        if name in _input_names(ssh):
+            raise ValueError(f"Ya existe una fuente llamada '{name}' en OBS")
+        resp = _ws_strict(ssh, "CreateInput", {
+            "sceneName":     OBS_SCENE_NAME,
+            "inputName":     name,
+            "inputKind":     OBS_AUDIO_INPUT_KIND,
+            "inputSettings": {
+                "input":               url,
+                "is_local_file":       False,
+                "buffering_mb":        buffering_mb,
+                "reconnect_delay_sec": reconnect_delay_sec,
+            },
+            "sceneItemEnabled": False,
+        })
+        return {"name": name, "scene_item_id": resp.get("sceneItemId"), "url": url}
+
+
+def update_audio_source(name: str, url=None, new_name=None,
+                        buffering_mb=None, reconnect_delay_sec=None) -> dict:
+    name = _clean_source_name(name)
+
+    settings: dict = {}
+    if url is not None:
+        settings["input"]         = _clean_stream_url(url)
+        settings["is_local_file"] = False
+    if buffering_mb is not None:
+        settings["buffering_mb"] = _clamp_int(buffering_mb, 1, 64, _DEFAULT_BUFFERING_MB)
+    if reconnect_delay_sec is not None:
+        settings["reconnect_delay_sec"] = _clamp_int(reconnect_delay_sec, 1, 60, _DEFAULT_RECONNECT_SEC)
+
+    renamed = None
+    if new_name is not None:
+        cleaned = _clean_source_name(new_name)
+        if cleaned != name:
+            renamed = cleaned
+
+    retagged = 0
+    with _ssh() as ssh:
+        existing = _input_names(ssh)
+        if name not in existing:
+            raise ValueError(f"No existe la fuente '{name}' en OBS")
+        if renamed and renamed in existing:
+            raise ValueError(f"Ya existe una fuente llamada '{renamed}' en OBS")
+
+        if settings:
+            _ws_strict(ssh, "SetInputSettings",
+                       {"inputName": name, "inputSettings": settings, "overlay": True})
+
+        if renamed:
+            _ws_strict(ssh, "SetInputName", {"inputName": name, "newInputName": renamed})
+            # Los programas referencian la fuente POR NOMBRE. Sin este arrastre, el
+            # cambio por horario dejaría de encontrarla y el canal se quedaría en la
+            # fuente por defecto sin avisar.
+            programs = _read_programs(ssh, strict=False)
+            for prog in programs:
+                if prog.get("source") == name:
+                    prog["source"] = renamed
+                    retagged += 1
+            if retagged:
+                _write_programs(ssh, programs)
+
+    return {"name": renamed or name, "programs_retagged": retagged}
+
+
+def delete_audio_source(name: str, force: bool = False) -> dict:
+    """Borra la radio de OBS. Si está programada exige confirmación explícita
+    (`force`), porque además hay que sacar esos programas de la agenda."""
+    name = _clean_source_name(name)
+    if name == OBS_DEFAULT_SOURCE:
+        raise ValueError(
+            f"'{name}' es la fuente por defecto del canal (la que suena cuando no hay "
+            "ningún programa al aire): no se puede borrar")
+
+    with _ssh() as ssh:
+        if name not in _input_names(ssh):
+            raise ValueError(f"No existe la fuente '{name}' en OBS")
+
+        programs = _read_programs(ssh, strict=False)
+        using    = [p for p in programs if p.get("source") == name]
+        if using and not force:
+            raise SourceInUse([p.get("name") or "(sin nombre)" for p in using])
+
+        # Si está al aire, primero volvemos a la fuente por defecto: eliminar el input
+        # activo dejaría la transmisión muda.
+        if _get_current_source(ssh) == name:
+            _switch_source(ssh, name, OBS_DEFAULT_SOURCE)
+
+        _ws_strict(ssh, "RemoveInput", {"inputName": name})
+
+        if using:
+            _write_programs(ssh, [p for p in programs if p.get("source") != name])
+
+    return {"name": name, "programs_removed": len(using)}
+
+
+def probe_stream_url(url: str) -> dict:
+    """Prueba una URL de radio con ffprobe DESDE la PC de OBS (misma red y mismo
+    ffmpeg que va a usar la fuente).
+
+    Es la única verificación que sirve: una vez creado el input, `GetMediaInputStatus`
+    informa PLAYING aunque no salga audio (ver deploy/obs-watchdog/README.md), así que
+    mirar el estado de la fuente no distingue una URL viva de una muerta.
+    """
+    url = _clean_stream_url(url)
+    cmd = ("timeout 25 ffprobe -v error -rw_timeout 8000000 -select_streams a:0 "
+           "-show_entries stream=codec_name,sample_rate,channels,bit_rate -of json "
+           f"{shlex.quote(url)}")
+    with _ssh() as ssh:
+        out, err = ssh.run_command(cmd, timeout=40)
+
+    try:
+        streams = json.loads(out).get("streams", [])
+    except (json.JSONDecodeError, AttributeError):
+        streams = []
+    if not streams:
+        return {"ok": False,
+                "detail": _clip(err, 200) or "la URL no devolvió ninguna pista de audio"}
+
+    st = streams[0]
+    return {"ok": True, "codec": st.get("codec_name"), "sample_rate": st.get("sample_rate"),
+            "channels": st.get("channels"), "bit_rate": st.get("bit_rate")}
 
 
 # ── Stream ─────────────────────────────────────────────────────
@@ -452,18 +777,207 @@ def get_poll_state() -> dict:
 
 
 # ── Programación ───────────────────────────────────────────────
+# El cambio de fuente por horario lo hace la PC de OBS, no el panel:
+# `schedule_runner.sh` corre por cron cada minuto, lee programs.json y llama a
+# `cambiar_fuente.sh` en el minuto exacto de `start` y en el de `end`. Fuera de
+# todo programa suena OBS_DEFAULT_SOURCE. De ese diseño salen las reglas que
+# valida `_validate_programs`:
+#
+#   · Es disparo por flanco. Si dos programas se pisan —o si uno termina en el
+#     mismo minuto en que arranca el otro— el runner ejecuta las dos acciones en
+#     el mismo ciclo y el canal queda en la fuente equivocada. Por eso se exige
+#     al menos un minuto de separación (de ahí los 08:01-10:00 / 10:01-13:00 de
+#     la programación histórica).
+#   · `end < start` significa que el programa cruza la medianoche y termina al
+#     día siguiente del que figura en `days`.
+#   · La fuente se referencia POR NOMBRE: si no existe en la escena, el swap
+#     falla en silencio y el canal se queda en la fuente por defecto.
+
+_DAY_KEYS     = ["lu", "ma", "mi", "ju", "vi", "sa", "do"]
+_MIN_PER_DAY  = 1440
+_MIN_PER_WEEK = 7 * _MIN_PER_DAY
+# Acepta 8:01 además de 08:01 (los <input type="time"> mandan siempre HH:MM, pero la
+# API también la usa el bot y se puede cargar a mano). Se normaliza al guardar.
+_HHMM_RE      = re.compile(r"([01]?\d|2[0-3]):[0-5]\d")
+
+
+def _parse_hhmm(value, field: str) -> int:
+    """'HH:MM' → minutos desde la medianoche."""
+    text = value.strip() if isinstance(value, str) else ""
+    if not _HHMM_RE.fullmatch(text):
+        raise ValueError(f"El {field} tiene que ser una hora en formato HH:MM (recibí {value!r})")
+    h, m = text.split(":")
+    return int(h) * 60 + int(m)
+
+
+def _fmt_hhmm(minutes: int) -> str:
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+def _program_spans(prog: dict) -> list[tuple[int, int]]:
+    """Ocupación semanal del programa en minutos absolutos, como pares (inicio, fin)
+    con el minuto de fin INCLUIDO: ese minuto también es un flanco y no lo puede
+    compartir otro programa."""
+    start = _parse_hhmm(prog["start"], "inicio")
+    end   = _parse_hhmm(prog["end"],   "fin")
+    span  = (end - start) % _MIN_PER_DAY          # si cruza medianoche, suma un día
+    return [(_DAY_KEYS.index(d) * _MIN_PER_DAY + start,
+             _DAY_KEYS.index(d) * _MIN_PER_DAY + start + span) for d in prog["days"]]
+
+
+def _spans_overlap(a: tuple[int, int], b: tuple[int, int]) -> bool:
+    """Solape en la semana circular: un programa del domingo a la noche sigue el lunes."""
+    return any(a[0] + shift <= b[1] and b[0] <= a[1] + shift
+               for shift in (-_MIN_PER_WEEK, 0, _MIN_PER_WEEK))
+
+
+def _validate_programs(programs) -> list[dict]:
+    """Normaliza y valida la agenda entera. Levanta ValueError con un mensaje que se
+    pueda mostrar tal cual en el panel."""
+    if not isinstance(programs, list):
+        raise ValueError("La programación tiene que ser una lista de programas")
+
+    clean: list[dict] = []
+    seen_ids: set[str] = set()
+    for i, raw in enumerate(programs, 1):
+        if not isinstance(raw, dict):
+            raise ValueError(f"El programa #{i} no es un objeto válido")
+
+        name   = str(raw.get("name") or "").strip()
+        source = str(raw.get("source") or "").strip()
+        if not name:
+            raise ValueError(f"El programa #{i} no tiene nombre")
+        if not source:
+            raise ValueError(f"'{name}' no tiene fuente de audio asignada")
+
+        start = _parse_hhmm(raw.get("start"), f"inicio de '{name}'")
+        end   = _parse_hhmm(raw.get("end"),   f"fin de '{name}'")
+        if start == end:
+            raise ValueError(f"'{name}' empieza y termina a la misma hora")
+
+        days = raw.get("days")
+        if not isinstance(days, list) or not days:
+            raise ValueError(f"'{name}' no tiene ningún día seleccionado")
+        invalid = [str(d) for d in days if d not in _DAY_KEYS]
+        if invalid:
+            raise ValueError(f"'{name}' tiene días inválidos: {', '.join(invalid)}")
+        days = [d for d in _DAY_KEYS if d in days]     # orden canónico y sin repetidos
+
+        pid = str(raw.get("id") or "").strip()
+        if not pid or pid in seen_ids:
+            pid = uuid.uuid4().hex[:8]
+        seen_ids.add(pid)
+
+        clean.append({"id": pid, "name": name, "source": source,
+                      "start": _fmt_hhmm(start), "end": _fmt_hhmm(end), "days": days})
+
+    spans = [(p, _program_spans(p)) for p in clean]
+    for i, (pa, sa) in enumerate(spans):
+        for pb, sb in spans[i + 1:]:
+            if any(_spans_overlap(a, b) for a in sa for b in sb):
+                raise ValueError(
+                    f"'{pa['name']}' ({pa['start']}–{pa['end']}) se pisa con "
+                    f"'{pb['name']}' ({pb['start']}–{pb['end']}). Tiene que quedar al menos "
+                    "un minuto entre el fin de uno y el inicio del otro.")
+    return clean
+
+
+def _read_programs(ssh: SSHClient, strict: bool = True) -> list:
+    """Lee programs.json de la PC de OBS. Con `strict`, un archivo corrupto levanta
+    error en vez de devolver una lista vacía: si el panel mostrara la agenda vacía,
+    el primer guardado pisaría toda la programación real."""
+    out, _ = ssh.run_command(f"cat {OBS_PROGRAMS_FILE} 2>/dev/null")
+    if not out.strip():
+        return []
+    try:
+        data = json.loads(out)
+    except json.JSONDecodeError as e:
+        if strict:
+            raise ValueError(
+                f"{OBS_PROGRAMS_FILE} en la PC de OBS no es JSON válido ({e}). "
+                f"Hay una copia previa en {OBS_PROGRAMS_FILE}.bak.")
+        return []
+    return data if isinstance(data, list) else []
+
+
+def _write_programs(ssh: SSHClient, programs: list):
+    """Escritura atómica con respaldo. `schedule_runner.sh` lee este archivo con jq
+    cada minuto: si quedara a medio escribir o con JSON inválido, el cambio de fuente
+    por horario dejaría de funcionar sin avisar. Por eso va a un temporal, se valida
+    con jq y recién ahí se reemplaza."""
+    payload = json.dumps(programs, ensure_ascii=False, indent=4)
+    f = OBS_PROGRAMS_FILE
+    cmd = (f"cp -f {f} {f}.bak 2>/dev/null; "
+           f"printf '%s\\n' {shlex.quote(payload)} > {f}.tmp && jq empty {f}.tmp "
+           f"&& mv -f {f}.tmp {f} && echo WROTE_OK")
+    out, err = ssh.run_command(cmd, timeout=25)
+    if "WROTE_OK" not in out:
+        ssh.run_command(f"rm -f {f}.tmp")
+        raise RuntimeError("No se pudo guardar la programación en la PC de OBS: "
+                           + (_clip(err, 200) or _clip(out, 200) or "sin detalle"))
+
+
+def _check_sources_exist(ssh: SSHClient, programs: list):
+    """Avisa si un programa apunta a una fuente que no está en la escena. Si OBS no
+    contesta no bloqueamos el guardado: sería peor no poder tocar la agenda cada vez
+    que OBS está caído."""
+    if not programs:
+        return
+    known = _scene_source_names(ssh)
+    if not known:
+        return
+    missing = sorted({p["source"] for p in programs} - known)
+    if missing:
+        raise ValueError("Estas fuentes no existen en la escena de OBS: " + ", ".join(missing))
+
 
 def get_programs() -> list:
     with _ssh() as ssh:
-        out, _ = ssh.run_command(f"cat {OBS_PROGRAMS_FILE}")
-        return json.loads(out)
+        return _read_programs(ssh)
 
 
-def set_programs(programs: list):
-    payload = json.dumps(programs, ensure_ascii=False)
-    safe    = payload.replace("'", "'\\''")
+def set_programs(programs: list) -> list:
+    """Reemplaza la agenda completa."""
+    clean = _validate_programs(programs)
     with _ssh() as ssh:
-        ssh.run_command(f"echo '{safe}' > {OBS_PROGRAMS_FILE}")
+        _check_sources_exist(ssh, clean)
+        _write_programs(ssh, clean)
+    return clean
+
+
+def add_program(program: dict) -> dict:
+    """Agrega un programa a la agenda existente (le asigna id nuevo)."""
+    nuevo = _validate_programs([{**program, "id": None}])[0]
+    with _ssh() as ssh:
+        merged = _validate_programs(_read_programs(ssh) + [nuevo])
+        _check_sources_exist(ssh, [nuevo])
+        _write_programs(ssh, merged)
+    return nuevo
+
+
+def update_program(program_id: str, program: dict) -> dict:
+    """Modifica un programa por id, dejando el resto de la agenda intacto."""
+    with _ssh() as ssh:
+        programs = _read_programs(ssh)
+        idx = next((i for i, p in enumerate(programs) if p.get("id") == program_id), None)
+        if idx is None:
+            raise LookupError(f"No existe ningún programa con id '{program_id}'")
+        programs[idx] = {**programs[idx], **program, "id": program_id}
+        merged = _validate_programs(programs)
+        _check_sources_exist(ssh, [merged[idx]])
+        _write_programs(ssh, merged)
+        return merged[idx]
+
+
+def delete_program(program_id: str) -> dict:
+    with _ssh() as ssh:
+        programs = _read_programs(ssh)
+        target = next((p for p in programs if p.get("id") == program_id), None)
+        if target is None:
+            raise LookupError(f"No existe ningún programa con id '{program_id}'")
+        _write_programs(ssh, _validate_programs(
+            [p for p in programs if p.get("id") != program_id]))
+    return target
 
 
 # ── Diagnóstico determinístico ─────────────────────────────────

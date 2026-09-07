@@ -425,8 +425,71 @@ reiniciando OBS o la cámara por separado.
 
 Además del bot, el canal se puede operar desde un panel web en
 el navegador (misma red): estado en vivo, botones de la
-transmisión, fuentes de audio, watchdog, captura de pantalla
-y logs.
+transmisión, radios, agenda de programas, watchdog, captura de
+pantalla y logs.
+
+── Radios ───────────────────────────────────────────────
+
+La tarjeta "Radios" lista las radios del canal con su dirección
+de stream. El interruptor de cada una la pone al aire AHORA
+(es el ojo de OBS); cuando arranca o termina un programa de la
+agenda, la PC del canal vuelve a mandar ella.
+
+  ➕ Agregar  → suma una radio nueva: nombre y dirección del
+                stream (http:// o https://). Ya no hace falta
+                crearla a mano en OBS.
+  ✏️  Editar   → cambia la dirección o el nombre.
+  🗑  Eliminar → la saca de OBS.
+
+Antes de guardar conviene tocar "Probar URL": la PC del canal
+se conecta de verdad a esa dirección y responde si suena, con
+qué calidad y en cuántos canales. Es la única prueba confiable
+—una vez creada, una radio puede "figurar" reproduciendo aunque
+no salga sonido—, así que sirve para no enterarse recién al
+aire de que la dirección estaba mal.
+
+Cosas a tener en cuenta:
+
+  · Si le cambiás el nombre a una radio, los programas que la
+    usan se actualizan solos.
+  · La radio POR DEFECTO (la que suena cuando no hay ningún
+    programa al aire) no se puede eliminar.
+  · Si eliminás una radio que está programada, el panel avisa
+    en qué programas está; si confirmás igual, esos programas
+    también salen de la agenda.
+  · Si la radio estaba al aire, el canal vuelve a la fuente por
+    defecto antes de eliminarla, para no quedar mudo.
+
+La cámara, el reloj, el clima y el carrusel están en "Otras
+fuentes de la escena", desplegable al pie de la tarjeta: ahí el
+interruptor solo prende y apaga su visibilidad.
+
+── Agenda de programas ──────────────────────────────────
+
+La agenda es una grilla de lunes a domingo con los programas
+dibujados en su horario, cada uno con el color de su radio. Una
+línea roja marca el momento actual. Fuera de esos bloques suena
+la radio por defecto.
+
+  ➕ Nuevo programa → nombre, radio, hora de inicio y de fin, y
+                     los días en que va.
+  Tocar un bloque  → editar ese programa o eliminarlo.
+
+Los programas que cruzan la medianoche (por ejemplo 21:01 a
+01:00) se ven partidos entre los dos días, que es como
+realmente funcionan: terminan al día siguiente.
+
+IMPORTANTE — dejá al menos un minuto libre entre un programa
+y el siguiente. La PC del canal cambia de radio en el minuto
+exacto en que un programa empieza y en el que termina; si uno
+termina 10:00 y el otro empieza 10:00, las dos órdenes caen en
+el mismo minuto y el canal queda en la radio equivocada. Por eso
+la programación histórica va 08:01–10:00 y después 10:01–13:00.
+El panel no deja guardar programas que se pisen y lo avisa con
+el nombre de los dos programas en conflicto.
+
+También avisa si falta un dato (nombre, radio, horarios o días)
+o si el programa apunta a una radio que ya no existe en OBS.
 
 ── Botón "Diagnóstico" ──────────────────────────────────
 
